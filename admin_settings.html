@@ -1,0 +1,374 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — admin_settings.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Painel de configurações do sistema pelo administrador. Alterar variáveis de ambiente, toggles de funcionalidades e retenção de dados.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Lista de todas as configurações.
+   • Editor de cada configuração (input/select/toggle).
+   • Seção de variáveis de ambiente.
+   • Toggles de funcionalidades.
+   • Botão de salvar todas as alterações.
+   • Botão de exportar/importar configurações.
+   • Histórico de alterações recentes.
+   • Botão de resetar para padrão.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • SettingsController.getAllSettings() — listagem.
+   • SettingsController.updateSetting() — atualização.
+   • SettingsController.exportSettings() — exportação.
+   • SettingsController.importSettings() — importação.
+   • ConfigService.getSpreadsheetId() — SPREADSHEETS_ID.
+   • LoggerService.log() — registro de alterações.
+ * * Admin-only — restrito a administradores.
+   Audit trail — histórico de todas as alterações.
+   Import/export — backup e restauração de configurações.
+   Toggle switches — ativação/desativação de funcionalidades.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Configurações do Sistema</title>
+  <style>
+    :root {
+      --ia:#ff4d8d; --fil:#4cc9f0; --psi:#ff9e2c; --neu:#8b5cf6; --bio:#2dd4a0;
+      --bg1:#160f2e; --bg2:#2a1a52; --card:rgba(255,255,255,.06); --text:#f3eeff; --muted:#b7a8e0;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:"Segoe UI",system-ui,sans-serif; background:radial-gradient(1200px 700px at 50% -10%,var(--bg2),var(--bg1) 70%);
+      color:var(--text); min-height:100vh; padding:28px 20px 60px; }
+    header { max-width:1200px; margin:0 auto 26px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+    header h1 { font-size:clamp(1.6rem,4vw,2.2rem); }
+    .btn { padding:10px 20px; border:1px solid rgba(255,255,255,.2); border-radius:12px; background:var(--card);
+      color:var(--text); cursor:pointer; font-size:.9rem; transition:all .2s; text-decoration:none; display:inline-flex;
+      align-items:center; gap:8px; font-family:inherit; }
+    .btn:hover { background:rgba(255,255,255,.1); }
+    .btn-primary { background:var(--ia); border-color:var(--ia); font-weight:600; }
+    .btn-success { background:var(--bio); border-color:var(--bio); font-weight:600; }
+    .container { max-width:1200px; margin:0 auto; }
+    .section { background:var(--card); border:1px solid rgba(255,255,255,.12); border-radius:20px; padding:28px; margin-bottom:24px; }
+    .section-title { font-size:1.3rem; font-weight:700; margin-bottom:20px; display:flex; align-items:center; gap:10px; }
+    .setting-group { margin-bottom:24px; padding-bottom:24px; border-bottom:1px solid rgba(255,255,255,.08); }
+    .setting-group:last-child { border-bottom:none; margin-bottom:0; padding-bottom:0; }
+    .setting-label { font-weight:600; margin-bottom:6px; display:block; }
+    .setting-desc { color:var(--muted); font-size:.85rem; margin-bottom:10px; }
+    .form-input, .form-select { width:100%; max-width:500px; padding:10px 14px; background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.15); border-radius:8px; color:var(--text); font-size:.9rem; font-family:inherit; }
+    .form-input:focus, .form-select:focus { outline:none; border-color:var(--ia); }
+    .toggle { position:relative; display:inline-block; width:52px; height:28px; }
+    .toggle input { opacity:0; width:0; height:0; }
+    .slider { position:absolute; cursor:pointer; inset:0; background:rgba(255,255,255,.2); border-radius:28px; transition:.3s; }
+    .slider:before { position:absolute; content:""; height:20px; width:20px; left:4px; bottom:4px; background:white;
+      border-radius:50%; transition:.3s; }
+    input:checked + .slider { background:var(--bio); }
+    input:checked + .slider:before { transform:translateX(24px); }
+    .history-list { list-style:none; margin-top:16px; }
+    .history-item { padding:12px; background:rgba(255,255,255,.03); border-radius:8px; margin-bottom:10px; font-size:.85rem; }
+    .history-time { color:var(--muted); }
+    .toast { position:fixed; bottom:30px; right:30px; padding:16px 24px; background:var(--bio); border-radius:12px;
+      color:white; font-weight:600; box-shadow:0 8px 24px rgba(0,0,0,.3); opacity:0; transform:translateY(20px);
+      transition:all .3s; z-index:1000; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .toast.error { background:#b91c1c; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚙️ Configurações do Sistema</h1>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-success" id="saveSettingsButton" type="button">💾 Salvar Alterações</button>
+      <button class="btn" id="exportSettingsButton" type="button">📥 Exportar</button>
+      <a href="?page=admin_dashboard&amp;token=<?= session && session.sessionId ? session.sessionId : '' ?>" class="btn">← Dashboard</a>
+    </div>
+  </header>
+  <div class="container">
+    <div class="section">
+      <div class="section-title">🔧 Configurações Gerais</div>
+      <div class="setting-group">
+        <label class="setting-label">Nome da Aplicação</label>
+        <div class="setting-desc">Nome exibido no topo da aplicação e emails</div>
+        <input inputmode="text" type="text" class="form-input" id="appName" value="Alquimia do Saber">
+      </div>
+      <div class="setting-group">
+        <label class="setting-label">Email de Contato</label>
+        <div class="setting-desc">Email para suporte e notificações administrativas</div>
+        <input inputmode="email" type="email" class="form-input" id="contactEmail" value="admin@alquimiadosaber.pt">
+      </div>
+      <div class="setting-group">
+        <label class="setting-label">Retenção de Logs (dias)</label>
+        <div class="setting-desc">Número de dias para manter logs antes da purga automática</div>
+        <input inputmode="decimal" type="number" class="form-input" id="logRetention" value="90" min="30" max="365">
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">🎮 Funcionalidades</div>
+      <div class="setting-group">
+        <label class="setting-label">Permitir Registro Público</label>
+        <div class="setting-desc">Permitir que novos utilizadores se registrem sem convite</div>
+        <label class="toggle"><input type="checkbox" id="publicRegistration" checked><span class="slider"></span></label>
+      </div>
+      <div class="setting-group">
+        <label class="setting-label">Sistema de Conquistas</label>
+        <div class="setting-desc">Ativar gamificação com conquistas e medalhas</div>
+        <label class="toggle"><input type="checkbox" id="achievements" checked><span class="slider"></span></label>
+      </div>
+      <div class="setting-group">
+        <label class="setting-label">Leaderboard Global</label>
+        <div class="setting-desc">Exibir placar de pontuação entre todos os utilizadores</div>
+        <label class="toggle"><input type="checkbox" id="leaderboard" checked><span class="slider"></span></label>
+      </div>
+      <div class="setting-group">
+        <label class="setting-label">Exportação de Resultados</label>
+        <div class="setting-desc">Permitir que utilizadores exportem seus resultados em PDF/CSV</div>
+        <label class="toggle"><input type="checkbox" id="exportResults" checked><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">🔐 Segurança & Privacidade</div>
+      <div class="setting-group">
+        <label class="setting-label">Autenticação de Dois Fatores</label>
+        <div class="setting-desc">Exigir 2FA para utilizadores administradores</div>
+        <label class="toggle"><input type="checkbox" id="require2FA" disabled aria-describedby="twoFactorNote"><span class="slider"></span></label>
+        <div class="setting-desc" id="twoFactorNote">Disponível após a migração das contas legadas sem salt.</div>
+      </div>
+      <div class="setting-group">
+        <label class="setting-label">Tempo de Sessão (minutos)</label>
+        <div class="setting-desc">Duração máxima de uma sessão ativa antes de expirar</div>
+        <input inputmode="decimal" type="number" class="form-input" id="sessionTimeout" value="60" min="15" max="480">
+      </div>
+      <div class="setting-group">
+        <label class="setting-label">Modo de Manutenção</label>
+        <div class="setting-desc">Desabilitar acesso ao sistema para manutenção (apenas admin pode acessar)</div>
+        <label class="toggle"><input type="checkbox" id="maintenanceMode"><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">📜 Histórico de Alterações</div>
+      <ul class="history-list" id="settingsHistory" aria-live="polite"><li class="history-item">Carregando alterações...</li></ul>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var FIELD_MAP = {
+      appName: 'APP_NAME', contactEmail: 'ADMIN_EMAIL', logRetention: 'LOG_RETENTION_DAYS',
+      publicRegistration: 'PUBLIC_REGISTRATION', achievements: 'ACHIEVEMENTS_ENABLED',
+      leaderboard: 'LEADERBOARD_ENABLED', exportResults: 'EXPORT_RESULTS_ENABLED',
+      sessionTimeout: 'MAX_SESSION_DURATION', maintenanceMode: 'MAINTENANCE_MODE'
+    };
+
+    function showToast(message, isError) {
+      var toast = document.getElementById('toast'); toast.textContent = message;
+      toast.classList.toggle('error', !!isError); toast.classList.add('show');
+      setTimeout(function() { toast.classList.remove('show'); }, 3200);
+    }
+
+    function setControlsDisabled(disabled) {
+      Object.keys(FIELD_MAP).forEach(function(id) { document.getElementById(id).disabled = disabled; });
+      document.getElementById('saveSettingsButton').disabled = disabled;
+      document.getElementById('exportSettingsButton').disabled = disabled;
+    }
+
+    function requireSettings(result) {
+      if (!result || !result.success || !Array.isArray(result.data)) {
+        throw new Error(result && result.error ? result.error : 'Resposta inválida do servidor.');
+      }
+      return result.data;
+    }
+
+    function renderHistory(settings) {
+      var history = document.getElementById('settingsHistory'); history.innerHTML = '';
+      var recent = settings.filter(function(item) { return item.updatedAt; }).sort(function(a, b) {
+        return String(b.updatedAt).localeCompare(String(a.updatedAt));
+      }).slice(0, 8);
+      if (!recent.length) { var empty = document.createElement('li'); empty.className = 'history-item'; empty.textContent = 'Nenhuma alteração registrada.'; history.appendChild(empty); return; }
+      recent.forEach(function(item) {
+        var row = document.createElement('li'); row.className = 'history-item';
+        var actor = document.createElement('strong'); actor.textContent = item.updatedBy || 'sistema';
+        var text = document.createTextNode(' atualizou ' + item.key + ' ');
+        var time = document.createElement('span'); time.className = 'history-time';
+        var date = new Date(item.updatedAt); time.textContent = isNaN(date.getTime()) ? '' : '• ' + date.toLocaleString('pt-BR');
+        row.appendChild(actor); row.appendChild(text); row.appendChild(time); history.appendChild(row);
+      });
+    }
+
+    function renderSettings(settings) {
+      var byKey = {};
+      settings.forEach(function(item) { byKey[item.key] = item; });
+      Object.keys(FIELD_MAP).forEach(function(id) {
+        var item = byKey[FIELD_MAP[id]]; if (!item) return;
+        var field = document.getElementById(id);
+        if (field.type === 'checkbox') field.checked = String(item.value).toLowerCase() === 'true';
+        else if (id === 'sessionTimeout') field.value = Math.max(15, Math.round(Number(item.value || 3600) / 60));
+        else field.value = item.value == null ? '' : item.value;
+      });
+      renderHistory(settings); setControlsDisabled(false);
+    }
+
+    function collectSettings() {
+      var changes = {};
+      Object.keys(FIELD_MAP).forEach(function(id) {
+        var field = document.getElementById(id);
+        var value = field.type === 'checkbox' ? field.checked : field.value;
+        if (id === 'sessionTimeout') value = Number(value) * 60;
+        changes[FIELD_MAP[id]] = value;
+      });
+      return changes;
+    }
+
+    function loadSettings() {
+      setControlsDisabled(true);
+      if (!authToken || typeof google === 'undefined' || !google.script || !google.script.run) {
+        showToast('Sessão ou conexão indisponível.', true); return;
+      }
+      google.script.run.withSuccessHandler(function(result) {
+        try { renderSettings(requireSettings(result)); }
+        catch (error) { showToast(error.message, true); }
+      }).withFailureHandler(function(error) {
+        showToast(error && error.message ? error.message : 'Falha ao carregar configurações.', true);
+      }).api_getSettings(authToken);
+    }
+
+    function saveSettings() {
+      var button = document.getElementById('saveSettingsButton'); button.disabled = true; button.textContent = 'Salvando...';
+      google.script.run.withSuccessHandler(function(result) {
+        button.textContent = '💾 Salvar Alterações';
+        try { renderSettings(requireSettings(result)); showToast('Configurações salvas.'); }
+        catch (error) { button.disabled = false; showToast(error.message, true); }
+      }).withFailureHandler(function(error) {
+        button.disabled = false; button.textContent = '💾 Salvar Alterações'; showToast(error && error.message ? error.message : 'Falha ao salvar configurações.', true);
+      }).api_saveAdminSettings(authToken, collectSettings());
+    }
+
+    function exportSettings() {
+      var button = document.getElementById('exportSettingsButton'); button.disabled = true;
+      google.script.run.withSuccessHandler(function(result) {
+        button.disabled = false;
+        if (!result || !result.success || !result.data) { showToast(result && result.error ? result.error : 'Falha ao exportar.', true); return; }
+        var blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+        var link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'alquimia-configuracoes.json';
+        document.body.appendChild(link); link.click(); link.remove(); setTimeout(function() { URL.revokeObjectURL(link.href); }, 0);
+        showToast('Configurações exportadas.');
+      }).withFailureHandler(function(error) {
+        button.disabled = false; showToast(error && error.message ? error.message : 'Falha ao exportar configurações.', true);
+      }).api_exportAdminSettings(authToken);
+    }
+
+    document.getElementById('saveSettingsButton').addEventListener('click', saveSettings);
+    document.getElementById('exportSettingsButton').addEventListener('click', exportSettings);
+    loadSettings();
+  </script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — onboarding.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Fluxo de onboarding para novos utilizadores. Conceito do Alquimia do Saber, 6 domínios, mecânica do caldeirão e primeiro cenário guiado.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Introdução ao projeto Alquimia do Saber.
+   • Explicação dos 6 domínios vocacionais.
+   • Tutorial da mecânica do caldeirão.
+   • Demonstração das barras de controlo.
+   • Primeiro cenário guiado.
+   • Botão de pular tutorial.
+   • Progresso do onboarding (passo a passo).
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • DomainController.getAllDomains() — domínios para apresentar.
+   • ScenarioController.getRandomScenario() — primeiro cenário.
+   • UserProfileService.updateProfile() — marcar onboarding completo.
+   • CauldronService.initializeCauldron() — inicializar caldeirão.
+ * * Step-by-step wizard — tutorial em etapas.
+   Skip option — possibilidade de pular tutorial.
+   Interactive demo — demonstração interativa da mecânica.
+   Progress tracking — progresso do onboarding salvo.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — onboarding</title>
+  <style>
+    :root { --bg:#17112b; --card:#241943; --text:#f7f2ff; --muted:#c8bce5; --accent:#ffd66b; --line:#ffffff24; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:20px; background:radial-gradient(circle at top,#30205c,var(--bg) 65%); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
+    .onboarding { width:min(680px,100%); padding:clamp(20px,5vw,40px); border:1px solid var(--line); border-radius:24px; background:var(--card); box-shadow:0 24px 70px #0005; }
+    .step-count,.eyebrow { color:var(--accent); font-weight:800; letter-spacing:.08em; text-transform:uppercase; font-size:.75rem; }
+    h1 { margin:.4rem 0 .7rem; font-size:clamp(1.7rem,5vw,2.6rem); line-height:1.1; }
+    p { color:var(--muted); }
+    .steps { display:grid; gap:12px; margin:24px 0; }
+    .step { display:none; min-height:180px; padding:20px; border:1px solid var(--line); border-radius:16px; background:#ffffff08; }
+    .step.active { display:block; }
+    .step h2 { margin:.4rem 0 .7rem; }
+    .step ul { padding-left:1.25rem; color:var(--muted); }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; }
+    button,a.button { min-height:46px; display:inline-flex; align-items:center; justify-content:center; padding:0 18px; border:1px solid var(--line); border-radius:12px; background:transparent; color:var(--text); font-weight:800; text-decoration:none; cursor:pointer; }
+    button.primary,a.primary { border-color:var(--accent); background:var(--accent); color:#2c2100; }
+    .note { margin-top:18px; padding:12px 14px; border-left:3px solid var(--accent); border-radius:8px; background:#ffffff08; color:var(--muted); font-size:.9rem; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <main class="onboarding" id="onboarding-container">
+    <span class="eyebrow">Primeira visita</span>
+    <h1>Bem-vindo ao laboratório de perguntas</h1>
+    <p>Em poucos passos, veja como experimentar sem procurar uma única resposta certa.</p>
+
+    <div class="steps">
+      <section class="step active" data-step="0">
+        <span class="step-count">Passo 1 de 4</span>
+        <h2>Leia e pergunte</h2>
+        <p>Você receberá uma situação para investigar. Antes de misturar, diga o que já sabe e o que ainda quer descobrir.</p>
+      </section>
+      <section class="step" data-step="1">
+        <span class="step-count">Passo 2 de 4</span>
+        <h2>Combine áreas</h2>
+        <p>Escolha quatro partes entre Artes, Biologia, Física, Filosofia, Sociologia e outras áreas. A mistura mostra sua estratégia nesta atividade.</p>
+      </section>
+      <section class="step" data-step="2">
+        <span class="step-count">Passo 3 de 4</span>
+        <h2>Explique sua escolha</h2>
+        <p>A justificativa é mais importante que os pontos. Você pode falar, escrever, desenhar ou conversar com um colega.</p>
+      </section>
+      <section class="step" data-step="3">
+        <span class="step-count">Passo 4 de 4</span>
+        <h2>Compare e refaça</h2>
+        <p>Conheça outra solução e mude sua mistura se quiser. O mapa final mostra interesses do momento — não prevê sua profissão nem define quem você é.</p>
+        <ul><li>Não é teste psicológico.</li><li>Não mede inteligência.</li><li>Não vale como nota.</li></ul>
+      </section>
+    </div>
+
+    <div class="actions">
+      <button id="previous-step" type="button" disabled>Voltar</button>
+      <button class="primary" id="next-step" type="button">Próximo</button>
+      <a class="button" href="?page=laboratory" target="_top">Pular explicação</a>
+    </div>
+    <p class="note">Se alguma palavra estiver difícil, pare e peça ajuda ao professor. O laboratório foi feito para conversar.</p>
+  </main>
+  <script>
+    (function () {
+      var current = 0;
+      var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
+      var previous = document.getElementById('previous-step');
+      var next = document.getElementById('next-step');
+      function show(index) {
+        current = Math.max(0, Math.min(steps.length - 1, index));
+        steps.forEach(function (step, i) { step.classList.toggle('active', i === current); });
+        previous.disabled = current === 0;
+        next.textContent = current === steps.length - 1 ? 'Entrar no laboratório' : 'Próximo';
+      }
+      previous.addEventListener('click', function () { show(current - 1); });
+      next.addEventListener('click', function () {
+        if (current === steps.length - 1) {
+          window.top.location.href = '?page=laboratory';
+          return;
+        }
+        show(current + 1);
+      });
+    }());
+  </script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — leaderboard.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Painel formativo do percurso. A visualização protege nomes e deixa claro
+ *   que pontos não medem inteligência, potencial ou aprendizagem.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Ranking global com top 20 utilizadores.
+   • Posição do utilizador corrente.
+   • Medalhas (ouro, prata, bronze).
+   • Filtro por turma.
+   • Comparação lado a lado.
+   • Histórico de posições.
+   • Botão de compartilhar posição.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • ScoreRankingService.getGlobalRanking(limit) — ranking global.
+   • ScoreRankingService.getClassroomRanking(classId) — ranking turma.
+   • ScoreRankingService.getUserPercentile(userId) — percentil.
+   • UserController.getAllUsers() — dados dos utilizadores.
+ * * Gamification — motivação por competição.
+   Real-time updates — posição atualizada após cada cenário.
+   Comparison view — comparação direta entre utilizadores.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Alquimia do Saber — Meu percurso</title>
+  <style>
+    :root {
+      --ia: #ff4d8d; --fil: #4cc9f0; --bg1: #160f2e; --bg2: #2a1a52;
+      --card: rgba(255,255,255,.07); --text: #f3eeff; --muted: #b7a8e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1000px 600px at 30% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 20px 16px;
+    }
+    .painel {
+      max-width: 640px; margin: 0 auto; padding: 22px 18px;
+      background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    .sub { color: var(--muted); font-size: .9rem; margin-bottom: 18px; }
+    .rv-linha[data-relacao="alvo"] { background: rgba(255,77,141,.14); }
+    .voltar { display: inline-block; margin-top: 18px; color: var(--fil); font-size: .9rem; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <main class="painel">
+    <h1>Meu percurso</h1>
+    <p class="sub">
+      Pontos registram atividades concluídas. Eles não medem inteligência, não
+      indicam profissão e não devem ser usados como nota.
+    </p>
+
+    <div id="rankingVizinhanca" role="status" aria-live="polite">
+      <p class="sub">Carregando sua posição…</p>
+    </div>
+
+    <a class="voltar" href="<?!= getScriptUrl() ?>?page=result_dashboard&amp;token=<?!= encodeURIComponent(session && session.token ? session.token : '') ?>" target="_top">← Voltar aos resultados</a>
+  </main>
+
+  <?!= include('RankingVizinhancaPartial') ?>
+  <script>
+    (function () {
+      // O token viaja na URL porque o Apps Script nao tem sessao entre doGet.
+      var token = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+      var destino = document.getElementById('rankingVizinhanca');
+
+      function mostrarMensagem(texto) {
+        destino.replaceChildren();
+        var mensagem = document.createElement('p');
+        mensagem.className = 'sub';
+        mensagem.textContent = String(texto || 'Não foi possível carregar o percurso.');
+        destino.appendChild(mensagem);
+      }
+
+      if (!token || typeof google === 'undefined' || !google.script || !google.script.run) {
+        mostrarMensagem('Entre no laboratório para rever seu percurso.');
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function (resultado) {
+          if (resultado && resultado.success) {
+            RankingVizinhanca.render(destino, resultado.data);
+          } else {
+            mostrarMensagem((resultado && resultado.error) ||
+              'Não foi possível carregar o percurso.');
+          }
+        })
+        .withFailureHandler(function (erro) {
+          mostrarMensagem('Falha ao falar com o servidor: ' +
+            (erro && erro.message ? erro.message : erro));
+        })
+        .api_getRankingVizinhanca(token);
+    }());
+  </script>
+  <?!= include('HealthCheck') ?>
+</body>
+</html>

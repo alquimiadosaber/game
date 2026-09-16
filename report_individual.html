@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatório individual — Alquimia do Saber</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172033; background: #f5f7fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    main { width: min(920px, 100%); margin: auto; padding: 24px; }
+    header, .panel { background: #fff; border: 1px solid #dce2ec; border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+    h1, h2, p { margin-top: 0; }
+    .controls { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: end; }
+    label { display: grid; gap: 6px; font-weight: 650; }
+    select, button { min-height: 48px; padding: 10px 14px; border-radius: 10px; font: inherit; }
+    select { width: 100%; border: 1px solid #9aa8bd; background: #fff; }
+    button { border: 0; background: #1559b7; color: #fff; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #e8eef8; color: #17345d; }
+    button:disabled { opacity: .55; cursor: wait; }
+    #status { min-height: 24px; color: #3c4d67; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .metric { border-left: 4px solid #6f52c9; background: #f7f4ff; padding: 14px; border-radius: 10px; }
+    .metric strong { display: block; font-size: 1.35rem; margin-top: 5px; }
+    ul { padding-left: 22px; }
+    @media (max-width: 640px) { main { padding: 12px; } .controls { grid-template-columns: 1fr; } }
+    @media print { body { background: #fff; } .controls, #status { display: none; } main { width: 100%; padding: 0; } .panel, header { break-inside: avoid; } }
+  </style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 48px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Relatório individual</h1>
+      <p>Visão formativa do percurso, das dimensões exploradas e das recomendações do estudante.</p>
+      <div class="controls">
+        <label>Estudante
+          <select id="scope" aria-describedby="status"><option value="">Carregando estudantes…</option></select>
+        </label>
+        <button id="generate" type="button">Gerar relatório</button>
+        <button id="print" class="secondary" type="button" disabled>Imprimir</button>
+      </div>
+    </header>
+    <p id="status" role="status" aria-live="polite">Validando acesso administrativo…</p>
+    <section id="report" class="panel" hidden aria-labelledby="reportTitle">
+      <h2 id="reportTitle">Resultado</h2>
+      <div id="summary" class="grid"></div>
+      <h2>Dimensões</h2><ul id="dimensions"></ul>
+      <h2>Recomendações</h2><ul id="recommendations"></ul>
+    </section>
+  </main>
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var scope = document.getElementById('scope');
+    var generateButton = document.getElementById('generate');
+    var printButton = document.getElementById('print');
+    var statusNode = document.getElementById('status');
+    var reportNode = document.getElementById('report');
+
+    function setStatus(message) { statusNode.textContent = message; }
+    function addMetric(label, value) {
+      var item = document.createElement('div'); item.className = 'metric';
+      var caption = document.createElement('span'); caption.textContent = label;
+      var strong = document.createElement('strong'); strong.textContent = value;
+      item.append(caption, strong); return item;
+    }
+    function fillList(node, entries) {
+      node.replaceChildren();
+      (entries.length ? entries : ['Sem dados para exibir.']).forEach(function(entry) {
+        var item = document.createElement('li'); item.textContent = entry; node.appendChild(item);
+      });
+    }
+    function render(report) {
+      var profile = report.vocationalProfile;
+      var summary = document.getElementById('summary'); summary.replaceChildren();
+      summary.append(
+        addMetric('Estudante', report.user.fullName || report.user.userId),
+        addMetric('Progresso', String(report.progression.completionPercent || 0) + '%'),
+        addMetric('Nível', String(report.progression.level || 1)),
+        addMetric('Vocação em destaque', profile && profile.vocation ? profile.vocation.Title : 'Ainda não definida'),
+        addMetric('Compatibilidade', profile ? String(profile.compatibility || 0) : '—')
+      );
+      var dimensions = Object.keys(report.dimensions || {}).map(function(key) { return key + ': ' + report.dimensions[key]; });
+      fillList(document.getElementById('dimensions'), dimensions);
+      fillList(document.getElementById('recommendations'), report.recommendations || []);
+      reportNode.hidden = false; printButton.disabled = false;
+      setStatus('Relatório gerado em ' + new Date(report.generatedAt).toLocaleString('pt-BR') + '.');
+    }
+    function handleResult(result) {
+      generateButton.disabled = false;
+      if (!result || !result.success) { setStatus((result && result.error) || 'Não foi possível gerar o relatório.'); return; }
+      render(result.data);
+    }
+    function generateReport() {
+      if (!scope.value) { setStatus('Selecione um estudante.'); return; }
+      generateButton.disabled = true; setStatus('Gerando relatório…');
+      google.script.run.withSuccessHandler(handleResult).withFailureHandler(function(error) {
+        generateButton.disabled = false; setStatus(error.message || 'Falha ao gerar o relatório.');
+      }).api_generateAdminReport(authToken, 'individual', scope.value);
+    }
+    function loadDirectory(result) {
+      if (!result || !result.success) { scope.replaceChildren(); setStatus((result && result.error) || 'Acesso não autorizado.'); return; }
+      scope.replaceChildren(new Option('Selecione um estudante', ''));
+      result.data.users.forEach(function(user) { scope.appendChild(new Option(user.name || user.id, user.id)); });
+      setStatus(result.data.users.length ? 'Selecione um estudante para continuar.' : 'Nenhum estudante disponível.');
+    }
+    generateButton.addEventListener('click', generateReport);
+    printButton.addEventListener('click', function() { window.print(); });
+    google.script.run.withSuccessHandler(loadDirectory).withFailureHandler(function(error) { setStatus(error.message || 'Falha ao carregar estudantes.'); }).api_getReportDirectory(authToken);
+  </script>
+</body>
+</html>

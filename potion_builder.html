@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alquimia do Saber — Poção</title>
+<style>
+  :root{color-scheme:dark;--bg:#151126;--panel:#211a38;--line:#51456e;--text:#f4efff;--muted:#c2b8d8;--accent:#7dd3fc;--ok:#34d399}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,sans-serif}main{max-width:820px;margin:auto;padding:32px 20px 64px}.muted{color:var(--muted)}.panel,.message{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;margin:18px 0}.message.error{border-color:#fb7185;color:#fecdd3}.message.ok{border-color:var(--ok)}.parts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}@media(max-width:620px){.parts{grid-template-columns:1fr}}label{display:block;font-weight:700}select,textarea,button{width:100%;font:inherit;color:var(--text);background:#171229;border:1px solid var(--line);border-radius:8px;padding:11px;margin-top:7px}textarea{min-height:150px;resize:vertical}button{cursor:pointer;font-weight:700;background:var(--panel)}button:hover:not(:disabled){border-color:var(--accent)}button:disabled{opacity:.55;cursor:wait}.actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}@media(max-width:520px){.actions{grid-template-columns:1fr}}.total{font-size:1.15rem;font-weight:800}.total.valid{color:var(--ok)}a{color:var(--accent)}
+</style><style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head><body><main>
+  <p class="muted">Etapa 3 de 4</p><h1>Prepare sua poção</h1><p class="muted" id="scenario-title">Carregando cenário…</p>
+  <section class="panel" id="potion-panel" aria-busy="true">
+    <p>Distribua exatamente quatro partes entre os três ingredientes.</p>
+    <div class="parts">
+      <label>FIL — Filosofia<select id="fil"><option value="0">0/4</option><option value="1" selected>1/4</option><option value="2">2/4</option><option value="3">3/4</option><option value="4">4/4</option></select></label>
+      <label>PSI — Psicologia<select id="psi"><option value="0">0/4</option><option value="1" selected>1/4</option><option value="2">2/4</option><option value="3">3/4</option><option value="4">4/4</option></select></label>
+      <label>IA — Inteligência Artificial<select id="ia"><option value="0">0/4</option><option value="1">1/4</option><option value="2" selected>2/4</option><option value="3">3/4</option><option value="4">4/4</option></select></label>
+    </div>
+    <p class="total valid" id="total">Total: 4/4</p>
+    <label for="response">Explique sua decisão em texto<textarea id="response" required maxlength="4000" placeholder="Descreva sua análise, os riscos e a decisão que tomaria."></textarea></label>
+    <div class="actions"><button type="button" id="preview" disabled>Pré-visualizar reação</button><button type="button" id="submit" disabled>Submeter poção e ver resultado</button></div>
+  </section>
+  <div id="message" role="status" aria-live="polite"></div>
+  <p id="draft-status" class="muted"></p>
+  <div class="actions"><a id="result-link" target="_top" hidden>Ver resultado geral</a><a id="history-link" target="_top">Conferir histórico</a><button type="button" id="retry-load" hidden>Tentar carregar novamente</button><button type="button" id="new-attempt" hidden>Já conferi o histórico: preparar outra tentativa</button></div>
+  <p><a id="back" target="_top">Voltar ao cenário</a></p>
+</main><script>
+(function () {
+  var token='<?= session && session.sessionId ? session.sessionId : "" ?>';
+  var owner='<?= session && session.userId ? session.userId : "" ?>';
+  var scenarioId='<?= requestParams && requestParams.scenario ? requestParams.scenario : "" ?>';
+  var fields=['fil','psi','ia'], ready=false, busy=false, pending=false, savedId='';
+  var draftKey=owner && scenarioId ? 'alquimia:potion:'+encodeURIComponent(owner)+':'+encodeURIComponent(scenarioId) : '';
+  function el(id){return document.getElementById(id);}
+  function route(page,extra){var q=new URLSearchParams(extra||{});q.set('page',page);q.set('token',token);return '?'+q.toString();}
+  el('back').href=route('scenario_detail',{scenario:scenarioId});
+  el('result-link').href=route('result_dashboard');
+  el('history-link').href=route('scenario_history');
+  function message(kind,text){var p=document.createElement('p');p.className='message '+kind;p.textContent=text;el('message').replaceChildren(p);}
+  function controls(){
+    el('potion-panel').setAttribute('aria-busy',String(busy));
+    fields.concat(['response','preview','submit']).forEach(function(id){el(id).disabled=!ready||busy||pending||!!savedId;});
+    el('new-attempt').hidden=!ready||busy||(!pending&&!savedId);
+    el('result-link').hidden=!savedId;
+  }
+  function mixture(){return {fil:Number(el('fil').value)*25,psi:Number(el('psi').value)*25,ia:Number(el('ia').value)*25,freeText:el('response').value.trim()};}
+  function updateTotal(){var sum=fields.reduce(function(n,id){return n+Number(el(id).value);},0);el('total').textContent='Total: '+sum+'/4 ('+sum*25+'%)';el('total').className='total'+(sum===4?' valid':'');}
+  function saveDraft(){
+    try {
+      if(!draftKey)throw new Error('Sem identidade para rascunho');
+      sessionStorage.setItem(draftKey,JSON.stringify({mix:mixture(),pending:pending,savedId:savedId,at:Date.now()}));
+      el('draft-status').textContent='Rascunho temporário preservado nesta aba por até 2 horas. Não substitui o registro no histórico.';
+    }catch(ignore){el('draft-status').textContent='Rascunho disponível apenas nesta página. Copie sua justificativa antes de sair.';}
+  }
+  try {
+    var draft=draftKey&&JSON.parse(sessionStorage.getItem(draftKey));
+    if(draft&&draft.mix&&Date.now()-draft.at<7200000){
+      fields.forEach(function(id){if([0,25,50,75,100].indexOf(draft.mix[id])!==-1)el(id).value=String(draft.mix[id]/25);});
+      el('response').value=typeof draft.mix.freeText==='string'?draft.mix.freeText.slice(0,4000):'';
+      pending=draft.pending===true;savedId=typeof draft.savedId==='string'?draft.savedId:'';
+      el('draft-status').textContent='Rascunho desta conta recuperado nesta aba.';
+    }
+  }catch(ignore){}
+  function valid(requireText){
+    var mix=mixture();
+    if(fields.some(function(id){return [0,25,50,75,100].indexOf(mix[id])===-1;})||mix.fil+mix.psi+mix.ia!==100){message('error','Distribua exatamente quatro partes (100%) entre os ingredientes.');return false;}
+    if(requireText&&(!mix.freeText||mix.freeText.length>4000)){message('error','Escreva sua decisão com até 4000 caracteres.');el('response').focus();return false;}
+    return true;
+  }
+  function call(method,args,success,failure){
+    try {
+      if(typeof google==='undefined'||!google.script||!google.script.run)throw new Error('RPC indisponível');
+      var runner=google.script.run.withSuccessHandler(success).withFailureHandler(failure);
+      runner[method].apply(runner,args);
+    }catch(error){failure(error);}
+  }
+  function load(){
+    if(busy)return;
+    ready=false;busy=true;controls();el('retry-load').hidden=true;
+    if(!token||!scenarioId){busy=false;controls();message('error','Sessão ou cenário ausente. Entre novamente e escolha um cenário.');return;}
+    call('api_flowGetScenario',[token,scenarioId],function(result){
+      busy=false;
+      if(!result||result.success!==true||!result.data||!result.data.scenario||String(result.data.scenario.id)!==String(scenarioId)){controls();el('retry-load').hidden=false;message('error','Não foi possível carregar este cenário. Confira sua sessão e tente novamente.');return;}
+      ready=true;el('scenario-title').textContent=result.data.scenario.title;
+      if(savedId){el('history-link').href=route('scenario_history',{attempt:savedId});message('ok','Tentativa registrada: '+savedId+'. Confira o histórico ou o resultado geral.');}
+      else if(pending)message('error','O envio anterior ficou sem confirmação. Confira o histórico antes de preparar outra tentativa.');
+      else message('','Cenário carregado. Prepare a mistura e explique sua decisão.');
+      controls();
+    },function(){busy=false;controls();el('retry-load').hidden=false;message('error','Não foi possível carregar o cenário. Tente novamente.');});
+  }
+  fields.forEach(function(id){el(id).addEventListener('change',function(){updateTotal();saveDraft();});});
+  el('response').addEventListener('input',saveDraft);
+  el('retry-load').addEventListener('click',load);
+  el('new-attempt').addEventListener('click',function(){pending=false;savedId='';saveDraft();controls();message('','Outra tentativa será um novo registro. Revise sua composição antes de enviar.');});
+  el('preview').addEventListener('click',function(){
+    if(!ready||busy||pending||savedId||!valid(false))return;
+    saveDraft();busy=true;controls();
+    call('api_flowPreviewPotion',[token,scenarioId,mixture()],function(result){
+      busy=false;controls();
+      if(!result||result.success!==true||!result.data||!result.data.reaction){message('error','Prévia indisponível. Sua composição foi mantida.');return;}
+      message('ok','Prévia — ainda não registrada. '+(result.data.reaction.description||'Reação calculada.')+' '+(result.data.feedback&&result.data.feedback.message||''));
+    },function(){busy=false;controls();message('error','Falha ao consultar a prévia. Sua composição foi mantida.');});
+  });
+  el('submit').addEventListener('click',function(){
+    if(!ready||busy||pending||savedId||!valid(true))return;
+    pending=true;saveDraft();busy=true;controls();message('','Registrando sua tentativa…');
+    function uncertain(){busy=false;controls();message('error','Não foi possível confirmar todo o registro. Confira o histórico antes de enviar outra tentativa; sua justificativa foi preservada.');}
+    call('api_flowSubmitPotion',[token,scenarioId,mixture()],function(result){
+      var data=result&&result.data;
+      if(!result||result.success!==true||!data||!data.interactionId||String(data.scenarioId)!==String(scenarioId)){uncertain();return;}
+      savedId=String(data.interactionId);pending=false;busy=false;saveDraft();controls();
+      el('history-link').href=route('scenario_history',{attempt:savedId});
+      message('ok','Tentativa registrada: '+savedId+'. '+(data.resultWarning||!data.dashboard?'O resultado geral ainda está indisponível; confira a tentativa no histórico.':'Confira sua tentativa no histórico ou abra o resultado geral.'));
+    },uncertain);
+  });
+  updateTotal();load();
+}());
+</script></body></html>

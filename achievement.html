@@ -1,0 +1,397 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — achievement.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Página de conquistas e medalhas. Conquistas disponíveis, desbloqueadas, progresso para próximas e critérios de desbloqueio.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Grid de conquistas (desbloqueadas e bloqueadas).
+   • Barra de progresso para próxima conquista.
+   • Critérios de cada conquista.
+   • Data de desbloqueio.
+   • Animação de desbloqueio (efeito confete).
+   • Filtro por tipo de conquista.
+   • Contagem total de conquistas.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • GamificationService.getAchievements() — todas as conquistas.
+   • GamificationService.getBadges(userId) — medalhas do utilizador.
+   • GamificationService.checkAchievements(userId) — verificação.
+   • NotificationService.sendAchievementNotification() — notificação.
+ * * Unlock animation — efeito visual ao desbloquear.
+   Progress tracking — barra de progresso para próximas.
+   Category filtering — filtro por tipo de conquista.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Conquistas</title>
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.06);
+      --text: #f3eeff; --muted: #b7a8e0; --gold: #ffd700;
+      --silver: #c0c0c0; --bronze: #cd7f32;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 700px at 50% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 28px 20px 60px;
+    }
+    header { max-width: 1200px; margin: 0 auto 26px; text-align: center; }
+    header h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+    header p { color: var(--muted); margin-top: 6px; }
+
+    .stats { max-width: 1200px; margin: 0 auto 30px; display: flex; gap: 16px; flex-wrap: wrap; }
+    .stat-card { flex: 1; min-width: 200px; background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px; padding: 20px; text-align: center; }
+    .stat-value { font-size: 2.2rem; font-weight: 800; margin-bottom: 6px; }
+    .stat-label { color: var(--muted); font-size: .9rem; }
+
+    .filters { max-width: 1200px; margin: 0 auto 24px; display: flex; gap: 12px; flex-wrap: wrap;
+      justify-content: center; }
+    .filter-btn { padding: 10px 20px; border: 1px solid rgba(255,255,255,.2); border-radius: 999px;
+      background: var(--card); color: var(--text); cursor: pointer; font-size: .9rem;
+      transition: all .2s; }
+    .filter-btn:hover { background: rgba(255,255,255,.1); }
+    .filter-btn.active { background: var(--ia); border-color: var(--ia); font-weight: 700; }
+
+    .achievements { max-width: 1200px; margin: 0 auto; display: grid; gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+
+    .achievement-card {
+      background: var(--card); border: 2px solid rgba(255,255,255,.12);
+      border-radius: 20px; padding: 24px; position: relative; overflow: hidden;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .achievement-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,.4); }
+    .achievement-card.locked { opacity: .5; filter: grayscale(0.7); }
+    .achievement-card.unlocked { border-color: var(--gold); }
+    .achievement-card.unlocked::before { content: ""; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,215,0,.1), transparent);
+      pointer-events: none; }
+
+    .badge { width: 80px; height: 80px; margin: 0 auto 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 2.4rem;
+      position: relative; }
+    .badge.gold { background: radial-gradient(circle, var(--gold), #b8860b);
+      box-shadow: 0 0 20px rgba(255,215,0,.4); }
+    .badge.silver { background: radial-gradient(circle, var(--silver), #808080);
+      box-shadow: 0 0 20px rgba(192,192,192,.3); }
+    .badge.bronze { background: radial-gradient(circle, var(--bronze), #8b4513);
+      box-shadow: 0 0 20px rgba(205,127,50,.3); }
+    .badge.locked { background: rgba(255,255,255,.08); box-shadow: none; }
+
+    .achievement-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; text-align: center; }
+    .achievement-desc { color: var(--muted); font-size: .85rem; margin-bottom: 16px;
+      text-align: center; line-height: 1.5; }
+
+    .progress-bar { height: 10px; background: rgba(255,255,255,.08); border-radius: 999px;
+      overflow: hidden; margin-bottom: 8px; }
+    .progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--ia), var(--fil));
+      border-radius: 999px; transition: width .6s ease; }
+    .progress-text { font-size: .8rem; color: var(--muted); text-align: center; }
+
+    .unlock-date { font-size: .75rem; color: var(--gold); text-align: center; margin-top: 12px;
+      font-weight: 600; }
+
+    .confetti { position: fixed; top: 50%; left: 50%; width: 10px; height: 10px;
+      background: var(--gold); pointer-events: none; animation: confetti-fall 2s ease-out forwards; }
+    @keyframes confetti-fall {
+      to { transform: translate(var(--x), var(--y)) rotate(720deg); opacity: 0; }
+    }
+
+    .empty-state { max-width: 600px; margin: 60px auto; text-align: center; }
+    .empty-state .icon { font-size: 4rem; margin-bottom: 16px; opacity: .3; }
+    .empty-state h3 { margin-bottom: 8px; }
+    .empty-state p { color: var(--muted); }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏆 Conquistas Alquímicas</h1>
+    <p>Desbloqueie medalhas conforme explora o universo das ciências e vocações.</p>
+  </header>
+
+  <div class="stats" id="stats">
+    <div class="stat-card">
+      <div class="stat-value" id="totalUnlocked">0</div>
+      <div class="stat-label">Desbloqueadas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="totalAchievements">0</div>
+      <div class="stat-label">Total Disponível</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="completionPercent">0%</div>
+      <div class="stat-label">Conclusão</div>
+    </div>
+  </div>
+
+  <div class="filters" id="filters">
+    <button class="filter-btn active" data-filter="all">Todas</button>
+    <button class="filter-btn" data-filter="exploration">Exploração</button>
+    <button class="filter-btn" data-filter="mastery">Maestria</button>
+    <button class="filter-btn" data-filter="social">Social</button>
+    <button class="filter-btn" data-filter="special">Especial</button>
+  </div>
+
+  <main class="achievements" id="achievements"></main>
+
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var DEMO_ACHIEVEMENTS = [
+      { id: 1, name: 'Primeiro Passo', description: 'Complete seu primeiro cenário epistémico', 
+        type: 'exploration', tier: 'bronze', unlocked: true, unlockedAt: '2026-07-01', progress: 100, maxProgress: 100, icon: '👣' },
+      { id: 2, name: 'Aprendiz Alquímico', description: 'Descubra 5 vocações diferentes',
+        type: 'exploration', tier: 'silver', unlocked: true, unlockedAt: '2026-07-10', progress: 100, maxProgress: 100, icon: '🧪' },
+      { id: 3, name: 'Mestre das Dimensões', description: 'Domine todas as 8 dimensões epistémicas',
+        type: 'mastery', tier: 'gold', unlocked: false, progress: 5, maxProgress: 8, icon: '🎓' },
+      { id: 4, name: 'Explorador de Domínios', description: 'Visite os 6 domínios vocacionais',
+        type: 'exploration', tier: 'silver', unlocked: false, progress: 4, maxProgress: 6, icon: '🗺️' },
+      { id: 5, name: 'Guardião do Conhecimento', description: 'Acumule 1000 pontos de experiência',
+        type: 'mastery', tier: 'gold', unlocked: false, progress: 650, maxProgress: 1000, icon: '📚' },
+      { id: 6, name: 'Alquimista Social', description: 'Compartilhe 3 resultados com colegas',
+        type: 'social', tier: 'bronze', unlocked: true, unlockedAt: '2026-07-15', progress: 100, maxProgress: 100, icon: '🤝' },
+      { id: 7, name: 'Perfeccionista', description: 'Complete um cenário com 100% de acerto',
+        type: 'mastery', tier: 'gold', unlocked: false, progress: 0, maxProgress: 1, icon: '⭐' },
+      { id: 8, name: 'Maratonista Epistémico', description: 'Complete 20 cenários em um mês',
+        type: 'special', tier: 'gold', unlocked: false, progress: 12, maxProgress: 20, icon: '🏃' }
+    ];
+
+    var currentFilter = 'all';
+
+    function buildCard(achievement) {
+      var card = document.createElement('div');
+      card.className = 'achievement-card ' + (achievement.unlocked ? 'unlocked' : 'locked');
+      card.dataset.type = achievement.type;
+
+      var badge = document.createElement('div');
+      badge.className = 'badge ' + (achievement.unlocked ? achievement.tier : 'locked');
+      badge.textContent = achievement.icon;
+      card.appendChild(badge);
+
+      var name = document.createElement('div');
+      name.className = 'achievement-name';
+      name.textContent = achievement.name;
+      card.appendChild(name);
+
+      var desc = document.createElement('div');
+      desc.className = 'achievement-desc';
+      desc.textContent = achievement.description;
+      card.appendChild(desc);
+
+      if (!achievement.unlocked && achievement.progress < achievement.maxProgress) {
+        var progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar';
+        var fill = document.createElement('div');
+        fill.className = 'fill';
+        fill.style.width = ((achievement.progress / achievement.maxProgress) * 100) + '%';
+        progressBar.appendChild(fill);
+        card.appendChild(progressBar);
+
+        var progressText = document.createElement('div');
+        progressText.className = 'progress-text';
+        progressText.textContent = achievement.progress + ' / ' + achievement.maxProgress;
+        card.appendChild(progressText);
+      }
+
+      if (achievement.unlocked && achievement.unlockedAt) {
+        var unlockDate = document.createElement('div');
+        unlockDate.className = 'unlock-date';
+        unlockDate.textContent = '🔓 Desbloqueada em ' + new Date(achievement.unlockedAt).toLocaleDateString('pt-BR');
+        card.appendChild(unlockDate);
+      }
+
+      return card;
+    }
+
+    function updateStats(achievements) {
+      var unlocked = achievements.filter(function(a) { return a.unlocked; }).length;
+      var total = achievements.length;
+      var percent = total > 0 ? Math.round((unlocked / total) * 100) : 0;
+
+      document.getElementById('totalUnlocked').textContent = unlocked;
+      document.getElementById('totalAchievements').textContent = total;
+      document.getElementById('completionPercent').textContent = percent + '%';
+    }
+
+    function render(achievements) {
+      var container = document.getElementById('achievements');
+      container.innerHTML = '';
+
+      var filtered = currentFilter === 'all' 
+        ? achievements 
+        : achievements.filter(function(a) { return a.type === currentFilter; });
+
+      if (filtered.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML = '<div class="icon">🏆</div><h3>Nenhuma conquista encontrada</h3>' +
+          '<p>Tente outro filtro ou continue explorando para desbloquear novas conquistas.</p>';
+        container.appendChild(empty);
+        return;
+      }
+
+      filtered.forEach(function(a) { container.appendChild(buildCard(a)); });
+      updateStats(achievements);
+    }
+
+    function setupFilters() {
+      var buttons = document.querySelectorAll('.filter-btn');
+      buttons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          buttons.forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          currentFilter = btn.dataset.filter;
+          loadAchievements();
+        });
+      });
+    }
+
+    function spawnConfetti() {
+      for (var i = 0; i < 30; i++) {
+        setTimeout(function() {
+          var confetti = document.createElement('div');
+          confetti.className = 'confetti';
+          confetti.style.setProperty('--x', (Math.random() * 400 - 200) + 'px');
+          confetti.style.setProperty('--y', (Math.random() * 400 + 200) + 'px');
+          confetti.style.background = ['var(--gold)', 'var(--ia)', 'var(--fil)', 'var(--psi)'][Math.floor(Math.random() * 4)];
+          document.body.appendChild(confetti);
+          setTimeout(function() { confetti.remove(); }, 2000);
+        }, i * 50);
+      }
+    }
+
+    function loadAchievements() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            var data = result && result.success && result.data ? result.data : DEMO_ACHIEVEMENTS;
+            render(data);
+          })
+          .withFailureHandler(function() { render(DEMO_ACHIEVEMENTS); })
+          .api_getAchievements(authToken);
+      } else {
+        render(DEMO_ACHIEVEMENTS);
+      }
+    }
+
+    setupFilters();
+    loadAchievements();
+  </script>
+</body>
+</html>

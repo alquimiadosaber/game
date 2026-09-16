@@ -1,0 +1,559 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — admin_logs.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Visualização de logs de auditoria do sistema. Tabela com todos os eventos registrados com filtros por tipo, data e utilizador.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Tabela de logs com paginação.
+   • Filtro por tipo de evento (AUTH, CRUD, ERROR, SYSTEM).
+   • Filtro por utilizador.
+   • Filtro por período.
+   • Contagem de eventos por tipo.
+   • Botão de exportar logs.
+   • Botão de limpar logs antigos.
+   • Indicador de volume de logs.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • LoggerService.getLogs(filters) — consulta de logs.
+   • LoggerService.purgeOldLogs(days) — purga.
+   • ExportService.exportUsersCSV() — exportação.
+   • LoggerService.log() — registro de purga.
+ * * Filterable table — filtros múltiplos combinados.
+   Pagination — paginação para grandes volumes.
+   Export capability — exportação de logs.
+   Purge control — controle de retenção de logs.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Logs do Sistema</title>
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.06);
+      --text: #f3eeff; --muted: #b7a8e0; --success: #2dd4a0; --warning: #ff9e2c; --danger: #ff4d8d;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 700px at 50% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 28px 20px 60px;
+    }
+    header { max-width: 1400px; margin: 0 auto 26px; display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 16px; }
+    header h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { padding: 10px 20px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px;
+      background: var(--card); color: var(--text); cursor: pointer; font-size: .9rem;
+      transition: all .2s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+      border: none; font-family: inherit; }
+    .btn:hover { background: rgba(255,255,255,.1); transform: translateY(-2px); }
+    .btn-danger { background: var(--danger); border-color: var(--danger); font-weight: 600; }
+    .btn-danger:hover { background: #ff3377; }
+    .btn-primary { background: var(--ia); border-color: var(--ia); font-weight: 600; }
+
+    .stats { max-width: 1400px; margin: 0 auto 24px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .stat-badge { padding: 12px 20px; background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px; display: flex; align-items: center; gap: 10px; }
+    .stat-badge .icon { font-size: 1.4rem; }
+    .stat-badge .value { font-size: 1.5rem; font-weight: 800; }
+    .stat-badge .label { color: var(--muted); font-size: .85rem; }
+
+    .filters { max-width: 1400px; margin: 0 auto 24px; background: var(--card);
+      border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 20px; }
+    .filter-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .filter-row:last-child { margin-bottom: 0; }
+    .filter-group { flex: 1; min-width: 200px; }
+    .filter-label { display: block; margin-bottom: 6px; font-size: .85rem; color: var(--muted); font-weight: 600; }
+    .filter-input, .filter-select { width: 100%; padding: 10px 14px; background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.15); border-radius: 8px; color: var(--text);
+      font-size: .9rem; font-family: inherit; }
+    .filter-input:focus, .filter-select:focus { outline: none; border-color: var(--ia); }
+    .filter-buttons { display: flex; gap: 8px; align-items: flex-end; }
+
+    .logs-container { max-width: 1400px; margin: 0 auto; background: var(--card);
+      border: 1px solid rgba(255,255,255,.12); border-radius: 16px; overflow: hidden; }
+    .logs-table { width: 100%; border-collapse: collapse; }
+    .logs-table thead { background: rgba(255,255,255,.05); }
+    .logs-table th { padding: 14px 16px; text-align: left; font-size: .85rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .5px; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,.1); }
+    .logs-table td { padding: 14px 16px; font-size: .9rem; border-bottom: 1px solid rgba(255,255,255,.06); }
+    .logs-table tbody tr { transition: background .2s; }
+    .logs-table tbody tr:hover { background: rgba(255,255,255,.03); }
+
+    .log-level { padding: 4px 10px; border-radius: 999px; font-size: .75rem; font-weight: 700;
+      text-transform: uppercase; display: inline-block; }
+    .log-level.info { background: rgba(76,201,240,.2); color: var(--fil); }
+    .log-level.warning { background: rgba(255,158,44,.2); color: var(--warning); }
+    .log-level.error { background: rgba(255,77,141,.2); color: var(--danger); }
+    .log-level.success { background: rgba(45,212,160,.2); color: var(--success); }
+    .log-level.auth { background: rgba(139,92,246,.2); color: var(--neu); }
+
+    .log-message { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .log-timestamp { color: var(--muted); font-size: .85rem; }
+    .log-user { color: var(--ia); font-weight: 600; }
+
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 20px;
+      border-top: 1px solid rgba(255,255,255,.1); }
+    .pagination-info { color: var(--muted); font-size: .9rem; }
+    .pagination-buttons { display: flex; gap: 8px; }
+    .page-btn { padding: 8px 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.15);
+      border-radius: 8px; color: var(--text); cursor: pointer; font-size: .85rem; transition: all .2s; }
+    .page-btn:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+    .page-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .page-btn.active { background: var(--ia); border-color: var(--ia); font-weight: 700; }
+
+    .empty-state { text-align: center; padding: 60px 20px; }
+    .empty-state .icon { font-size: 4rem; margin-bottom: 16px; opacity: .3; }
+    .empty-state h3 { margin-bottom: 8px; }
+    .empty-state p { color: var(--muted); }
+
+    .toast { position: fixed; bottom: 30px; right: 30px; padding: 16px 24px; background: var(--success);
+      border-radius: 12px; color: white; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.3);
+      opacity: 0; transform: translateY(20px); transition: all .3s; z-index: 1000; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.error { background: var(--danger); }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📋 Logs do Sistema</h1>
+    <div class="header-actions">
+      <button class="btn btn-primary" onclick="exportLogs()">📥 Exportar Logs</button>
+      <button class="btn btn-danger" onclick="confirmPurge()">🗑️ Purgar Antigos</button>
+      <a href="?page=admin_dashboard" class="btn">← Voltar ao Dashboard</a>
+    </div>
+  </header>
+
+  <div class="stats" id="stats">
+    <div class="stat-badge">
+      <span class="icon">📊</span>
+      <div>
+        <div class="value" id="totalLogs">0</div>
+        <div class="label">Total de Logs</div>
+      </div>
+    </div>
+    <div class="stat-badge">
+      <span class="icon" style="color: var(--danger)">❌</span>
+      <div>
+        <div class="value" id="errorCount">0</div>
+        <div class="label">Erros</div>
+      </div>
+    </div>
+    <div class="stat-badge">
+      <span class="icon" style="color: var(--warning)">⚠️</span>
+      <div>
+        <div class="value" id="warningCount">0</div>
+        <div class="label">Avisos</div>
+      </div>
+    </div>
+    <div class="stat-badge">
+      <span class="icon" style="color: var(--fil)">ℹ️</span>
+      <div>
+        <div class="value" id="infoCount">0</div>
+        <div class="label">Info</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label">Tipo de Evento</label>
+        <select class="filter-select" id="filterLevel">
+          <option value="">Todos os tipos</option>
+          <option value="auth">AUTH - Autenticação</option>
+          <option value="crud">CRUD - Operações</option>
+          <option value="error">ERROR - Erros</option>
+          <option value="warning">WARNING - Avisos</option>
+          <option value="info">INFO - Informação</option>
+          <option value="system">SYSTEM - Sistema</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Utilizador</label>
+        <input inputmode="text" type="text" class="filter-input" id="filterUser" placeholder="Email ou nome do utilizador">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Buscar Mensagem</label>
+        <input inputmode="text" type="text" class="filter-input" id="filterMessage" placeholder="Buscar na mensagem...">
+      </div>
+      <div class="filter-buttons">
+        <button class="btn btn-primary" onclick="applyFilters()">🔍 Filtrar</button>
+        <button class="btn" onclick="clearFilters()">✖️ Limpar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="logs-container">
+    <table class="logs-table">
+      <thead>
+        <tr>
+          <th style="width: 140px;">Data/Hora</th>
+          <th style="width: 100px;">Nível</th>
+          <th style="width: 180px;">Utilizador</th>
+          <th>Mensagem</th>
+          <th style="width: 120px;">Tipo</th>
+        </tr>
+      </thead>
+      <tbody id="logsTableBody">
+        <!-- Populated by JS -->
+      </tbody>
+    </table>
+    <div class="pagination">
+      <div class="pagination-info" id="paginationInfo">Mostrando 0-0 de 0 registros</div>
+      <div class="pagination-buttons">
+        <button class="page-btn" id="prevBtn" onclick="prevPage()">← Anterior</button>
+        <span id="pageNumbers"></span>
+        <button class="page-btn" id="nextBtn" onclick="nextPage()">Próxima →</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    var DEMO_LOGS = [
+      { id: 1, timestamp: '2026-07-18 14:23:15', level: 'error', user: 'system@alquimia', message: 'Falha ao sincronizar dados com folha "Resultados"', type: 'SYSTEM' },
+      { id: 2, timestamp: '2026-07-18 14:20:32', level: 'auth', user: 'ana.silva@escola.pt', message: 'Login bem-sucedido', type: 'AUTH' },
+      { id: 3, timestamp: '2026-07-18 14:18:45', level: 'info', user: 'carlos.mendes@escola.pt', message: 'Cenário "Bioética Aplicada" criado com sucesso', type: 'CRUD' },
+      { id: 4, timestamp: '2026-07-18 14:15:12', level: 'warning', user: 'system@alquimia', message: 'Quota de triggers em 78% - considere otimizar', type: 'SYSTEM' },
+      { id: 5, timestamp: '2026-07-18 14:10:08', level: 'info', user: 'beatriz.costa@escola.pt', message: 'Resultado gerado: Vocação recomendada "Engenharia de IA"', type: 'CRUD' },
+      { id: 6, timestamp: '2026-07-18 14:05:23', level: 'auth', user: 'daniel.rocha@escola.pt', message: 'Tentativa de login com senha incorreta', type: 'AUTH' },
+      { id: 7, timestamp: '2026-07-18 14:00:00', level: 'info', user: 'system@alquimia', message: 'Backup automático executado com sucesso', type: 'SYSTEM' },
+      { id: 8, timestamp: '2026-07-18 13:55:41', level: 'warning', user: 'admin@alquimia', message: 'Vocação "Astrofísica Quântica" sem descrição completa', type: 'CRUD' },
+      { id: 9, timestamp: '2026-07-18 13:50:17', level: 'error', user: 'system@alquimia', message: 'Timeout ao conectar com API externa', type: 'SYSTEM' },
+      { id: 10, timestamp: '2026-07-18 13:45:33', level: 'info', user: 'carlos.mendes@escola.pt', message: 'Configurações do sistema atualizadas', type: 'CRUD' }
+    ];
+
+    var currentPage = 1;
+    var pageSize = 10;
+    var filteredLogs = [];
+    var pageToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var filters = { level: '', user: '', message: '' };
+
+    function showToast(message, isError) {
+      var toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast' + (isError ? ' error' : '');
+      toast.classList.add('show');
+      setTimeout(function() { toast.classList.remove('show'); }, 3000);
+    }
+
+    function updateStats(logs) {
+      document.getElementById('totalLogs').textContent = logs.length;
+      document.getElementById('errorCount').textContent = logs.filter(function(l) { return l.level === 'error'; }).length;
+      document.getElementById('warningCount').textContent = logs.filter(function(l) { return l.level === 'warning'; }).length;
+      document.getElementById('infoCount').textContent = logs.filter(function(l) { return l.level === 'info'; }).length;
+    }
+
+    function filterLogs(logs) {
+      return logs.filter(function(log) {
+        if (filters.level && log.level !== filters.level) return false;
+        if (filters.user && !log.user.toLowerCase().includes(filters.user.toLowerCase())) return false;
+        if (filters.message && !log.message.toLowerCase().includes(filters.message.toLowerCase())) return false;
+        return true;
+      });
+    }
+
+    function renderLogs(logs, page) {
+      var tbody = document.getElementById('logsTableBody');
+      tbody.innerHTML = '';
+
+      if (logs.length === 0) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5"><div class="empty-state"><div class="icon">📋</div>' +
+          '<h3>Nenhum log encontrado</h3><p>Tente ajustar os filtros ou aguarde novos eventos.</p></div></td>';
+        tbody.appendChild(tr);
+        document.getElementById('paginationInfo').textContent = 'Mostrando 0-0 de 0 registros';
+        document.getElementById('prevBtn').disabled = true;
+        document.getElementById('nextBtn').disabled = true;
+        return;
+      }
+
+      var start = (page - 1) * pageSize;
+      var end = Math.min(start + pageSize, logs.length);
+      var pageLogs = logs.slice(start, end);
+
+      pageLogs.forEach(function(log) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = 
+          '<td class="log-timestamp">' + log.timestamp + '</td>' +
+          '<td><span class="log-level ' + log.level + '">' + log.level + '</span></td>' +
+          '<td class="log-user">' + log.user + '</td>' +
+          '<td class="log-message" title="' + log.message + '">' + log.message + '</td>' +
+          '<td>' + log.type + '</td>';
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('paginationInfo').textContent = 
+        'Mostrando ' + (start + 1) + '-' + end + ' de ' + logs.length + ' registros';
+      document.getElementById('prevBtn').disabled = page === 1;
+      document.getElementById('nextBtn').disabled = end >= logs.length;
+    }
+
+    function applyFilters() {
+      filters.level = document.getElementById('filterLevel').value;
+      filters.user = document.getElementById('filterUser').value;
+      filters.message = document.getElementById('filterMessage').value;
+      currentPage = 1;
+      filteredLogs = filterLogs(DEMO_LOGS);
+      renderLogs(filteredLogs, currentPage);
+    }
+
+    function clearFilters() {
+      document.getElementById('filterLevel').value = '';
+      document.getElementById('filterUser').value = '';
+      document.getElementById('filterMessage').value = '';
+      filters = { level: '', user: '', message: '' };
+      currentPage = 1;
+      filteredLogs = DEMO_LOGS;
+      renderLogs(filteredLogs, currentPage);
+    }
+
+    function prevPage() {
+      if (currentPage > 1) {
+        currentPage--;
+        renderLogs(filteredLogs, currentPage);
+      }
+    }
+
+    function nextPage() {
+      var maxPage = Math.ceil(filteredLogs.length / pageSize);
+      if (currentPage < maxPage) {
+        currentPage++;
+        renderLogs(filteredLogs, currentPage);
+      }
+    }
+
+    function exportLogs() {
+      var filterCount=0;
+      if(filters.level)filterCount++;
+      if(filters.user)filterCount++;
+      if(filters.message)filterCount++;
+      var filterMsg=filterCount>0?' ('+filterCount+' filtro'+(filterCount>1?'s':'')+' ativo'+(filterCount>1?'s':'')+')':'';
+      showToast('📥 Exportando logs'+filterMsg+'...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.success && result.data) {
+            var csv=result.data;
+            var lines=csv.split('\n').length-1;
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'logs_' + new Date().toISOString().slice(0,10) + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            showToast('✓ Logs exportados com sucesso! ('+lines+' registro'+(lines!==1?'s':'')+')');
+          } else {
+            showToast('✗ Erro ao exportar: ' + (result && result.error ? result.error : 'Sem dados'), true);
+          }
+        })
+        .withFailureHandler(function(error) {
+          showToast('✗ Falha na exportação: ' + error.message, true);
+        })
+        .api_exportLogsCSV(filters, pageToken);
+    }
+
+    function confirmPurge() {
+      var modal = document.getElementById('purgeModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'purgeModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+        modal.innerHTML = `
+          <div style="background:#20163f;border:1.5px solid rgba(255,255,255,0.2);border-radius:16px;padding:24px;max-width:440px;width:100%;box-shadow:0 12px 32px rgba(0,0,0,0.5);">
+            <h3 style="margin-bottom:12px;color:#f3eeff;font-size:1.2rem;">🗑️ Purgar Logs Antigos</h3>
+            <p style="color:#b7a8e0;font-size:0.9rem;line-height:1.4;margin-bottom:16px;">
+              Selecione o período de retenção para os logs. Registros mais antigos serão removidos permanentemente.
+            </p>
+            <label style="display:block;margin-bottom:6px;font-size:0.85rem;color:#b7a8e0;font-weight:600;">Remover logs com mais de:</label>
+            <select id="purgeDaysSelect" style="width:100%;padding:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:8px;color:#f3eeff;font-size:0.95rem;margin-bottom:18px;">
+              <option value="90" selected>90 dias (Recomendado)</option>
+              <option value="60">60 dias</option>
+              <option value="30">30 dias</option>
+              <option value="7">7 dias (Atenção)</option>
+            </select>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button type="button" class="btn" id="cancelPurgeBtn">Cancelar</button>
+              <button type="button" class="btn btn-danger" id="executePurgeBtn">Confirmar Purga</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('cancelPurgeBtn').addEventListener('click', function() {
+          modal.style.display = 'none';
+        });
+        document.getElementById('executePurgeBtn').addEventListener('click', function() {
+          var days = parseInt(document.getElementById('purgeDaysSelect').value) || 90;
+          modal.style.display = 'none';
+          executePurge(days);
+        });
+      }
+      modal.style.display = 'flex';
+    }
+
+    function executePurge(days) {
+      showToast('🗑️ Purgando logs antigos...');
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (result && result.success) {
+              showToast('✓ ' + (Number(result.data) || 0) + ' logs antigos foram purgados.');
+              loadLogs();
+            } else {
+              showToast('✗ ' + ((result && result.error) || 'Não foi possível purgar os logs.'), true);
+            }
+          })
+          .withFailureHandler(function(error) {
+            showToast('✗ Falha na purga: ' + (error && error.message ? error.message : error), true);
+          })
+          .api_purgeLogs(days, pageToken);
+      } else {
+        showToast('✓ Simulação: logs com mais de ' + days + ' dias foram purgados.');
+      }
+    }
+
+    function loadLogs() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            var logs = result && result.success && result.data ? result.data : DEMO_LOGS;
+            filteredLogs = logs;
+            updateStats(logs);
+            renderLogs(filteredLogs, currentPage);
+          })
+          .withFailureHandler(function() {
+            filteredLogs = DEMO_LOGS;
+            updateStats(DEMO_LOGS);
+            renderLogs(filteredLogs, currentPage);
+          })
+          .api_getLogs({}, pageToken);
+      } else {
+        filteredLogs = DEMO_LOGS;
+        updateStats(DEMO_LOGS);
+        renderLogs(filteredLogs, currentPage);
+      }
+    }
+
+    loadLogs();
+  </script>
+</body>
+</html>

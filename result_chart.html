@@ -1,0 +1,165 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — result_chart.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Gráfico de vectores psicométricos do utilizador. Gráfico radar, barras comparativas e evolução temporal.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Gráfico radar (FIL, PSI, IA, NEU, BIO, FIS, SOC, ART).
+   • Gráfico de barras comparativo (utilizador vs. proporção ideal).
+   • Gráfico de linha (evolução temporal).
+   • Legenda e valores percentuais.
+   • Botão de exportar como imagem.
+   • Botão de atualizar gráfico.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • ResultChartService.generateRadarChart(userId) — radar.
+   • ResultChartService.generateBarChart(dims) — barras.
+   • ResultChartService.generateLineChart(userId) — evolução.
+   • DimensionService.getDimensionPercentages(userId) — valores.
+ * * Charts API — gráficos nativos do Google.
+   Interactive charts — tooltips e zoom.
+   Export capability — exportação como imagem PNG.
+   Real-time data — dados atualizados em tempo real.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Dimensões</title>
+  <style>
+    :root { --bg:#160f2e; --panel:rgba(255,255,255,.08); --line:rgba(255,255,255,.16); --text:#f3eeff; --muted:#b7a8e0; --accent:#ff4d8d; --blue:#4cc9f0; }
+    * { box-sizing:border-box; } body { margin:0; min-height:100vh; padding:28px 20px 60px; color:var(--text); background:radial-gradient(1100px 700px at 50% -10%,#2a1a52,var(--bg) 70%); font-family:system-ui,"Segoe UI",sans-serif; } main { max-width:1100px; margin:auto; } header { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:22px; } h1 { margin:0; font-size:clamp(1.7rem,4vw,2.5rem); } h2 { margin-top:0; font-size:1.1rem; } .muted { color:var(--muted); } .card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:22px; margin-bottom:18px; } .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .dimension { display:grid; grid-template-columns:52px 1fr 54px; align-items:center; gap:10px; margin:13px 0; } .bar { height:13px; border-radius:99px; overflow:hidden; background:rgba(255,255,255,.12); } .bar i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--accent),var(--blue)); } .points { min-height:210px; display:flex; align-items:end; gap:10px; padding:18px 4px 8px; border-bottom:1px solid var(--line); } .point { flex:1; min-width:10px; border-radius:8px 8px 0 0; background:linear-gradient(180deg,var(--blue),#8b5cf6); position:relative; } .point span { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); font-size:.75rem; color:var(--muted); }
+    button,a { min-height:48px; border:0; border-radius:10px; padding:10px 16px; font:inherit; font-weight:700; cursor:pointer; } button { color:#fff; background:var(--accent); } a { display:inline-flex; align-items:center; color:var(--text); background:rgba(255,255,255,.1); text-decoration:none; } .status { min-height:24px; color:var(--muted); } .error { color:#fecaca; } @media (max-width:720px) { .grid { grid-template-columns:1fr; } }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <main id="result_chart-container">
+    <header><div><h1>Meu mapa de dimensões</h1><p class="muted">Veja como suas respostas se distribuem e evoluem.</p></div><div><button type="button" id="printButton">Exportar visão</button> <a href="?page=welcome&amp;token=<?= session && session.sessionId ? session.sessionId : '' ?>">Voltar</a></div></header>
+    <p id="status" class="status" role="status" aria-live="polite">Carregando dados...</p>
+    <section class="grid"><article class="card"><h2>Perfil psicométrico</h2><div id="dimensions" class="muted">Sem medições.</div></article><article class="card"><h2>Evolução da pontuação</h2><div id="points" class="points"><span class="muted">Sem pontuações registradas.</span></div><p id="lineCaption" class="muted"></p></article></section>
+  </main>
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    function loadChart() { return new Promise(function(resolve, reject) { if (!authToken || !window.google || !google.script || !google.script.run) { reject(new Error('Sessão indisponível.')); return; } google.script.run.withSuccessHandler(function(result) { if (!result || !result.success) { reject(new Error(result && result.error ? result.error : 'Não foi possível carregar os gráficos.')); return; } resolve(result.data); }).withFailureHandler(function(error) { reject(new Error(error && error.message ? error.message : 'Falha de comunicação.')); }).api_getResultChartDashboard(authToken); }); }
+    function render(data) {
+      var radar = data.radar || {}, labels = radar.labels || [], values = radar.values || [], host = document.getElementById('dimensions'); host.innerHTML = ''; labels.forEach(function(label, index) { var value = Math.max(0, Math.min(100, Number(values[index] || 0) * 100)); var row = document.createElement('div'); row.className = 'dimension'; var name = document.createElement('strong'); name.textContent = label; var bar = document.createElement('span'); bar.className = 'bar'; var fill = document.createElement('i'); fill.style.width = value + '%'; bar.appendChild(fill); var number = document.createElement('span'); number.textContent = Math.round(value) + '%'; row.appendChild(name); row.appendChild(bar); row.appendChild(number); host.appendChild(row); });
+      var line = data.line || {}, pointHost = document.getElementById('points'); pointHost.innerHTML = ''; var lineValues = (line.values || []).map(function(value) { return Number(value) || 0; }); if (!lineValues.length) { pointHost.innerHTML = '<span class="muted">Sem pontuações registradas.</span>'; } else { var max = Math.max.apply(Math, lineValues.concat([100])); lineValues.slice(-12).forEach(function(value) { var point = document.createElement('div'); point.className = 'point'; point.style.height = Math.max(8, Math.round((value / max) * 170)) + 'px'; var label = document.createElement('span'); label.textContent = Math.round(value); point.appendChild(label); pointHost.appendChild(point); }); document.getElementById('lineCaption').textContent = lineValues.length + ' pontuação(ões) registradas'; }
+      document.getElementById('status').textContent = 'Dados atualizados.';
+    }
+    document.getElementById('printButton').addEventListener('click', function() { window.print(); });
+    loadChart().then(render).catch(function(error) { document.getElementById('status').textContent = error.message; document.getElementById('status').className = 'status error'; });
+  </script>
+</body>
+</html>

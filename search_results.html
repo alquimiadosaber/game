@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Busca</title>
+  <style>
+    :root { color-scheme:dark; font-family:Inter,system-ui,sans-serif; --bg:#100b1b; --surface:#1c1430; --text:#f6f0ff; --muted:#c9bddb; --accent:#a78bfa; --border:#493865; }
+    * { box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); margin:0; min-width:320px; }
+    main { margin:auto; max-width:920px; padding:24px; }
+    a { color:var(--accent); }
+    form, section { background:var(--surface); border:1px solid var(--border); border-radius:16px; margin:18px 0; padding:20px; }
+    .search-row { display:grid; gap:10px; grid-template-columns:1fr auto; }
+    input[type="search"], button { background:#151020; border:1px solid var(--border); border-radius:10px; color:var(--text); font:inherit; min-height:48px; padding:10px 12px; }
+    button { background:var(--accent); color:#170e28; font-weight:800; }
+    fieldset { border:0; display:flex; flex-wrap:wrap; gap:18px; margin:14px 0 0; padding:0; }
+    label { align-items:center; display:flex; gap:8px; min-height:44px; }
+    .groups { display:grid; gap:18px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .result { border-top:1px solid var(--border); padding:14px 0; }
+    .result:first-of-type { border-top:0; }
+    .result h3 { font-size:1rem; margin:0 0 5px; }
+    .result p { color:var(--muted); margin:4px 0; }
+    .empty { color:var(--muted); }
+    @media (max-width:640px) { main{padding:16px}.search-row,.groups{grid-template-columns:1fr}fieldset{display:grid}.search-row button{width:100%} }
+  </style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 48px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+</head>
+<body>
+  <main>
+    <a id="backLink" target="_top" href="?page=scenario_list">← Voltar aos cenários</a>
+    <h1>Busca global</h1>
+    <p>Encontre cenários e vocações. Utilizadores só aparecem para administradores.</p>
+
+    <form id="searchForm" role="search">
+      <label for="query">Termo de busca</label>
+      <div class="search-row">
+        <input inputmode="search" id="query" name="q" type="search" minlength="2" maxlength="80" autocomplete="off" required placeholder="Ex.: criatividade, saúde, tecnologia">
+        <button type="submit">Buscar</button>
+      </div>
+      <fieldset>
+        <legend>Tipos de resultado</legend>
+        <label><input name="type" type="checkbox" value="scenarios" checked> Cenários</label>
+        <label><input name="type" type="checkbox" value="vocations" checked> Vocações</label>
+        <label><input name="type" type="checkbox" value="users"> Utilizadores (admin)</label>
+      </fieldset>
+    </form>
+
+    <p id="searchStatus" role="status" aria-live="polite">Digite ao menos dois caracteres para começar.</p>
+    <div id="resultGroups" class="groups" aria-label="Resultados da busca"></div>
+  </main>
+  <script>
+  (function () {
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var groups = document.getElementById('resultGroups');
+    var status = document.getElementById('searchStatus');
+    var labels = { scenarios:'Cenários', vocations:'Vocações', users:'Utilizadores' };
+
+    function route(page, id) {
+      var params = new URLSearchParams({ page:page, token:authToken });
+      if (id) params.set(page === 'scenario_detail' ? 'scenario' : 'id', id);
+      return '?' + params.toString();
+    }
+    function text(value, fallback) { return String(value || fallback || ''); }
+    function render(result) {
+      groups.replaceChildren();
+      if (!result || !result.success) {
+        status.textContent = result && result.error ? result.error : 'Não foi possível concluir a busca.';
+        return;
+      }
+      var total = 0;
+      Object.keys(labels).forEach(function (type) {
+        var items = Array.isArray(result.data[type]) ? result.data[type] : [];
+        if (!items.length) return;
+        total += items.length;
+        var section = document.createElement('section');
+        var heading = document.createElement('h2');
+        heading.textContent = labels[type] + ' (' + items.length + ')';
+        section.appendChild(heading);
+        items.forEach(function (item) {
+          var article = document.createElement('article');
+          article.className = 'result';
+          var title = document.createElement('h3');
+          title.textContent = text(item.title || item.name, 'Sem título');
+          var detail = document.createElement('p');
+          detail.textContent = text(item.description || item.category || item.role, 'Sem descrição adicional.');
+          article.append(title, detail);
+          if (type !== 'users') {
+            var link = document.createElement('a');
+            link.target = '_top';
+            link.href = route(type === 'scenarios' ? 'scenario_detail' : 'vocation_detail', item.id);
+            link.textContent = 'Abrir';
+            article.appendChild(link);
+          }
+          section.appendChild(article);
+        });
+        groups.appendChild(section);
+      });
+      status.textContent = total ? total + ' resultado(s) encontrado(s).' : 'Nenhum resultado para os filtros escolhidos.';
+    }
+
+    document.getElementById('backLink').href = route('scenario_list');
+    document.getElementById('searchForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      var query = document.getElementById('query').value.trim();
+      var types = Array.from(document.querySelectorAll('input[name="type"]:checked')).map(function (input) { return input.value; });
+      if (query.length < 2 || !types.length) { status.textContent = 'Informe um termo e escolha ao menos um tipo.'; return; }
+      if (!authToken || !window.google || !google.script || !google.script.run) { status.textContent = 'Sessão ou conexão indisponível.'; return; }
+      status.textContent = 'Buscando…';
+      google.script.run
+        .withSuccessHandler(render)
+        .withFailureHandler(function () { status.textContent = 'Falha de comunicação durante a busca.'; })
+        .api_searchCatalog(authToken, query, types);
+    });
+  }());
+  </script>
+</body>
+</html>

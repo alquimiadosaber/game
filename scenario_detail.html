@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alquimia do Saber — Cenário</title>
+<style>
+  :root{color-scheme:dark;--bg:#151126;--panel:#211a38;--line:#51456e;--text:#f4efff;--muted:#c2b8d8;--accent:#7dd3fc}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,sans-serif}main{max-width:800px;margin:auto;padding:32px 20px 64px}.muted{color:var(--muted)}article,.error{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px;margin:20px 0}.error{border-color:#fb7185;color:#fecdd3}.meta{display:flex;gap:12px;flex-wrap:wrap}.tag{border:1px solid var(--line);border-radius:999px;padding:4px 10px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}a{color:var(--accent)}a.button{background:var(--panel);border:1px solid var(--accent);border-radius:8px;padding:11px 16px;text-decoration:none;color:var(--text)}li{margin-bottom:8px}
+</style><style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head><body><main>
+<p class="muted">Etapa 2 de 4</p><div id="content"><p>Carregando cenário…</p></div>
+</main><script>
+var params=new URLSearchParams(location.search),token='<?= session && session.sessionId ? session.sessionId : "" ?>',scenarioId='<?= requestParams && requestParams.scenario ? requestParams.scenario : "" ?>';
+function route(page,extra){var q=new URLSearchParams(extra||{});q.set('page',page);q.set('token',token);return'?'+q.toString()}
+function error(message){var box=document.getElementById('content');box.innerHTML='';var p=document.createElement('p');p.className='error';p.textContent=message;box.appendChild(p)}
+function loaded(result){if(!result||!result.success){error((result&&result.error)||'Não foi possível abrir o cenário.');return}var data=result.data,s=data.scenario,box=document.getElementById('content');box.innerHTML='';var h=document.createElement('h1');h.textContent=s.title;var meta=document.createElement('div');meta.className='meta';[s.category,s.difficulty,s.completed?'Já concluído':'Ainda não concluído'].forEach(function(value){var span=document.createElement('span');span.className='tag';span.textContent=value;meta.appendChild(span)});var article=document.createElement('article');var narrative=document.createElement('p');narrative.textContent=s.narrative||s.description||'Este cenário não possui narrativa cadastrada.';article.appendChild(narrative);if(s.criteria){var c=document.createElement('p');c.className='muted';c.textContent='Critérios: '+s.criteria;article.appendChild(c)}var attempts=document.createElement('p');attempts.className='muted';attempts.textContent=(data.attempts||[]).length+' tentativa(s) anterior(es).';var actions=document.createElement('div');actions.className='actions';var back=document.createElement('a');back.href=route('scenario_list');back.target='_top';back.textContent='Voltar aos cenários';var start=document.createElement('a');start.className='button';start.href=route('potion_builder',{scenario:s.id});start.target='_top';start.textContent=s.completed?'Preparar outra poção':'Preparar poção';actions.append(back,start);box.append(h,meta,article,attempts,actions)}
+if(!token||!scenarioId)error('Sessão ou cenário ausente.');else if(typeof google!=='undefined'&&google.script&&google.script.run)google.script.run.withSuccessHandler(loaded).withFailureHandler(function(err){error('Erro ao carregar cenário. Tente novamente.');}).api_flowGetScenario(token,scenarioId);else error('Esta página precisa ser aberta pelo aplicativo publicado.');
+</script></body></html>

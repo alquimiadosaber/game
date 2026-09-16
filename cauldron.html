@@ -1,0 +1,348 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — cauldron.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Componente visual do caldeirão. Renderiza animação do caldeirão, efeitos de mistura e feedback visual das reações epistémicas.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Canvas/SVG do caldeirão.
+   • Efeitos de bolhas e fumaça (animação CSS).
+   • Indicador de ingredientes ativos.
+   • Feedback visual de reação (cor, intensidade).
+   • Barra de progresso da mistura.
+   • Botão de submissão integrado.
+   • Efeito de resultado (Ouro Alquímico).
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • CauldronService.getMixtureState() — estado da mistura.
+   • CauldronService.calculateReaction(fil, psi, ia) — reação.
+   • CauldronService.getCauldronAnimation(mixture) — dados de animação.
+   • CauldronService.submitPotion() — submissão.
+ * * CSS animations — animações sem dependências externas.
+   Color-coded feedback — cores refletem proporção epistémica.
+   Gamification visual — efeitos motivacionais de reação.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Caldeirão Alquímico</title>
+  <style>
+    :root{--ia:#ff4d8d;--fil:#4cc9f0;--psi:#ff9e2c;--neu:#8b5cf6;--bio:#2dd4a0;--fis:#ffd23f;--bg1:#160f2e;--bg2:#2a1a52;--text:#f3eeff;--muted:#b7a8e0;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:"Segoe UI",system-ui,sans-serif;background:radial-gradient(1200px 700px at 50% -10%,var(--bg2),var(--bg1) 70%);color:var(--text);min-height:100vh;padding:28px 20px 60px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+    .cauldron-container{max-width:600px;width:100%;text-align:center;}
+    h1{font-size:2rem;margin-bottom:12px;}
+    .subtitle{color:var(--muted);margin-bottom:40px;}
+    .cauldron{position:relative;width:300px;height:350px;margin:0 auto 30px;}
+    .cauldron-body{width:100%;height:280px;background:linear-gradient(180deg,rgba(50,30,60,.8),rgba(30,20,40,.9));border:4px solid rgba(255,255,255,.3);border-radius:0 0 140px 140px;border-top:none;position:relative;overflow:hidden;box-shadow:inset 0 0 40px rgba(0,0,0,.5),0 10px 40px rgba(0,0,0,.6);}
+    .cauldron-rim{position:absolute;top:-10px;left:-20px;right:-20px;height:30px;background:linear-gradient(180deg,rgba(100,80,90,.9),rgba(60,50,60,.95));border:4px solid rgba(255,255,255,.4);border-radius:20px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.5);}
+    .cauldron-rim::before,.cauldron-rim::after{content:"";position:absolute;top:5px;width:40px;height:20px;background:rgba(80,60,70,.9);border:3px solid rgba(255,255,255,.3);border-radius:10px;}
+    .cauldron-rim::before{left:-50px;}
+    .cauldron-rim::after{right:-50px;}
+    .liquid{position:absolute;bottom:0;left:0;right:0;height:60%;background:linear-gradient(180deg,var(--ia),var(--fil));transition:all 1s ease;animation:bubble 3s infinite;}
+    @keyframes bubble{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+    .bubble{position:absolute;bottom:0;width:20px;height:20px;background:rgba(255,255,255,.3);border-radius:50%;animation:rise 4s infinite;}
+    @keyframes rise{0%{bottom:0;opacity:1;transform:translateX(0) scale(1);}100%{bottom:100%;opacity:0;transform:translateX(var(--drift,20px)) scale(1.5);}}
+    .bubble:nth-child(1){left:20%;animation-delay:0s;--drift:30px;}
+    .bubble:nth-child(2){left:50%;animation-delay:1.2s;--drift:-25px;}
+    .bubble:nth-child(3){left:75%;animation-delay:2.4s;--drift:15px;}
+    .bubble:nth-child(4){left:35%;animation-delay:1.8s;--drift:-20px;}
+    .smoke{position:absolute;top:-60px;left:50%;width:100px;height:80px;background:radial-gradient(ellipse,rgba(200,180,220,.3),transparent);filter:blur(20px);animation:smoke 4s infinite;transform:translateX(-50%);}
+    @keyframes smoke{0%{opacity:.3;transform:translateX(-50%) translateY(0) scale(1);}100%{opacity:0;transform:translateX(-50%) translateY(-40px) scale(1.5);}}
+    .ingredients{margin-bottom:30px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+    .ingredient{padding:10px 20px;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.2);border-radius:12px;font-size:.9rem;font-weight:600;transition:all .3s;}
+    .ingredient.active{border-color:var(--ia);background:rgba(255,77,141,.2);box-shadow:0 0 20px rgba(255,77,141,.4);}
+    .progress-bar{width:100%;height:12px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin-bottom:20px;}
+    .progress-fill{height:100%;background:linear-gradient(90deg,var(--ia),var(--fil));border-radius:999px;width:0%;transition:width 1s ease;}
+    .btn{padding:14px 32px;background:var(--ia);border:none;border-radius:12px;color:white;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s;box-shadow:0 4px 16px rgba(255,77,141,.4);}
+    .btn:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(255,77,141,.6);}
+    .btn:disabled{opacity:.5;cursor:not-allowed;}
+    .result{margin-top:30px;padding:20px;background:rgba(255,215,0,.1);border:2px solid rgba(255,215,0,.3);border-radius:16px;display:none;}
+    .result.error{background:rgba(251,113,133,.1);border-color:rgba(251,113,133,.55);}
+    .result.show{display:block;animation:fadeIn .5s;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <div class="cauldron-container">
+    <h1>🧪 Caldeirão Alquímico</h1>
+    <p class="subtitle">Misture os ingredientes epistémicos para criar sua poção vocacional</p>
+    <div class="ingredients" id="ingredientsList">
+      <button type="button" class="ingredient active" data-ing="fil" onclick="toggleIng(this, 'fil')">FIL: Filosofia (1/4)</button>
+      <button type="button" class="ingredient active" data-ing="psi" onclick="toggleIng(this, 'psi')">PSI: Psicologia (1/4)</button>
+      <button type="button" class="ingredient active" data-ing="ia" onclick="toggleIng(this, 'ia')">IA: Inteligência Artificial (2/4)</button>
+    </div>
+    <div class="cauldron">
+      <div class="smoke"></div>
+      <div class="cauldron-rim"></div>
+      <div class="cauldron-body">
+        <div class="liquid" id="liquid">
+          <div class="bubble"></div>
+          <div class="bubble"></div>
+          <div class="bubble"></div>
+          <div class="bubble"></div>
+        </div>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+    <p id="formulaStatus" style="font-size:0.85em;color:var(--muted);text-align:center;margin:-4px 0 10px;font-weight:600;">Mistura: 25% Filosofia + 25% Psicologia + 50% IA</p>
+    <button class="btn" id="submitBtn" type="button" disabled onclick="submitPotion()">⏳ Aquecendo caldeirão…</button>
+    <div class="result" id="result">
+      <div style="font-size:3rem;margin-bottom:12px;">🏆</div>
+      <h2 style="margin-bottom:8px;" id="resultTitle">Ouro Alquímico Alcançado!</h2>
+      <p style="color:var(--muted);" id="resultDesc">Sua mistura epistémica foi bem-sucedida.</p>
+    </div>
+  </div>
+  <script>
+    var params = new URLSearchParams(location.search);
+    var token = '<?= typeof session !== "undefined" && session && session.sessionId ? session.sessionId : "" ?>' || params.get('token') || '';
+    var scenarioId = '<?= typeof requestParams !== "undefined" && requestParams && requestParams.scenario ? requestParams.scenario : "" ?>' || params.get('scenario') || 's1';
+    var progress = 0;
+    var formula = { fil: 25, psi: 25, ia: 50 };
+    var heated = false;
+
+    function updateLiquidColor() {
+      var liquid = document.getElementById('liquid');
+      var status = document.getElementById('formulaStatus');
+      var btn = document.getElementById('submitBtn');
+      if (!liquid) return;
+
+      var total = formula.fil + formula.psi + formula.ia;
+      if (total === 0) {
+        liquid.style.background = 'linear-gradient(180deg, #546e7a, #37474f)';
+        if (status) status.textContent = 'Caldeirão vazio. Selecione ingredientes acima!';
+        if (btn && heated) {
+          btn.disabled = true;
+          btn.textContent = '⚠️ Selecione ao menos 1 ingrediente';
+        }
+        return;
+      }
+
+      var parts = [];
+      if (formula.fil > 0) parts.push(formula.fil + '% Filosofia');
+      if (formula.psi > 0) parts.push(formula.psi + '% Psicologia');
+      if (formula.ia > 0) parts.push(formula.ia + '% IA');
+      if (status) status.textContent = 'Mistura: ' + parts.join(' + ');
+
+      if (btn && heated) {
+        btn.disabled = false;
+        btn.textContent = '✨ Submeter Poção';
+      }
+
+      if (formula.fil > 0 && formula.psi > 0 && formula.ia > 0) {
+        liquid.style.background = 'linear-gradient(180deg, #ffd700, #ff9800)';
+      } else if (formula.ia > 0 && formula.fil > 0) {
+        liquid.style.background = 'linear-gradient(180deg, #00e676, #00b0ff)';
+      } else if (formula.ia > 0) {
+        liquid.style.background = 'linear-gradient(180deg, #ff4081, #d500f9)';
+      } else if (formula.fil > 0) {
+        liquid.style.background = 'linear-gradient(180deg, #29b6f6, #0288d1)';
+      } else if (formula.psi > 0) {
+        liquid.style.background = 'linear-gradient(180deg, #ff9800, #f57c00)';
+      }
+    }
+
+    var interval = setInterval(function() {
+      progress += 10;
+      document.getElementById('progress').style.width = Math.min(progress, 100) + '%';
+      if (progress >= 100) {
+        clearInterval(interval);
+        heated = true;
+        updateLiquidColor();
+      }
+    }, 80);
+
+    function toggleIng(btn, key) {
+      btn.classList.toggle('active');
+      var activeFil = document.querySelector('[data-ing="fil"]').classList.contains('active') ? 25 : 0;
+      var activePsi = document.querySelector('[data-ing="psi"]').classList.contains('active') ? 25 : 0;
+      var activeIa = document.querySelector('[data-ing="ia"]').classList.contains('active') ? 50 : 0;
+      formula = { fil: activeFil, psi: activePsi, ia: activeIa };
+      updateLiquidColor();
+    }
+
+    function submitPotion() {
+      var btn = document.getElementById('submitBtn');
+      if (formula.fil === 0 && formula.psi === 0 && formula.ia === 0) return;
+      btn.disabled = true;
+      btn.textContent = '✨ Transmutando poção…';
+      document.getElementById('liquid').style.background = 'linear-gradient(180deg,#ffd700,#ffed4e)';
+
+      var payload = { scenarioId: scenarioId, fil: formula.fil, psi: formula.psi, ia: formula.ia, freeText: 'Transmutação no caldeirão alquímico.' };
+
+      function onFailure(message) {
+        var result = document.getElementById('result');
+        result.classList.add('show', 'error');
+        document.getElementById('resultTitle').textContent = 'Não foi possível concluir';
+        document.getElementById('resultDesc').textContent = message || 'Falha de comunicação. Tente novamente.';
+        btn.disabled = false;
+        btn.style.display = '';
+        btn.textContent = '↻ Tentar submeter novamente';
+      }
+
+      function onDone(res) {
+        if (!res || res.success !== true) {
+          onFailure((res && (res.error || res.message)) || 'Não foi possível salvar a poção. Tente novamente.');
+          return;
+        }
+        var result = document.getElementById('result');
+        result.classList.remove('error');
+        result.classList.add('show');
+        document.getElementById('resultTitle').textContent = 'Ouro Alquímico Alcançado!';
+        btn.style.display = 'none';
+        if (res && res.data && res.data.feedback) {
+          document.getElementById('resultDesc').textContent = res.data.feedback;
+        }
+      }
+
+      if (!token) {
+        onFailure('Sessão ausente. Entre novamente para registrar sua poção.');
+      } else if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onDone)
+          .withFailureHandler(function(err) {
+            onFailure(err && err.message);
+          })
+          .api_flowSubmitPotion(token, scenarioId, payload);
+      } else {
+        onFailure('Abra esta atividade pelo aplicativo publicado para registrar sua poção.');
+      }
+    }
+
+    // ── Suporte a teclado — caldeirão alquímico ─────────────────────────
+    document.addEventListener('keydown', function(event) {
+      if (['TEXTAREA', 'INPUT', 'SELECT'].indexOf(document.activeElement ? document.activeElement.tagName : '') !== -1) return;
+      var key = event.key;
+      // Teclas numéricas: 1=FIL, 2=PSI, 3=IA — ativa/desativa ingrediente
+      var keyMap = { '1': 'fil', '2': 'psi', '3': 'ia' };
+      if (keyMap[key]) {
+        event.preventDefault();
+        var btn = document.querySelector('[data-ing="' + keyMap[key] + '"]');
+        if (btn) toggleIng(btn, keyMap[key]);
+        return;
+      }
+      // Enter ou Space no body: submete a poção
+      if ((key === 'Enter' || key === ' ') && (event.target === document.body || event.target.id === 'submitBtn')) {
+        var submitBtn = document.getElementById('submitBtn');
+        if (submitBtn && !submitBtn.disabled) { event.preventDefault(); submitBtn.click(); }
+        return;
+      }
+      // Escape: volta à página anterior
+      if (key === 'Escape') {
+        if (window.history && window.history.length > 1) { event.preventDefault(); window.history.back(); }
+      }
+    });
+  </script>
+</body>
+</html>

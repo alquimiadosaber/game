@@ -1,0 +1,359 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — admin_scenarios.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Gestão de cenários pelo administrador. CRUD para criar, editar e desativar cenários do simulador.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Lista de cenários com status.
+   • Formulário de criação de cenário.
+   • Editor de narrativa (textarea).
+   • Seletor de categoria temática.
+   • Seletor de dificuldade (1-4).
+   • Preview do cenário antes de salvar.
+   • Botão de ativar/desativar.
+   • Contagem de cenários por categoria.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • ScenarioController.getAllScenarios() — listagem.
+   • ScenarioController.createScenario() — criação.
+   • ScenarioController.updateScenario() — edição.
+   • ScenarioController.deleteScenario() — desativação.
+   • ScenarioCategoryService.getAllCategories() — categorias.
+   • ScenarioDifficultyService.getAllDifficulties() — dificuldades.
+ * * Rich text editor — narrativa com formatação.
+   Category assignment — categorização temática.
+   Difficulty setting — definição de nível.
+   Preview mode — pré-visualização antes de salvar.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Gestão de Cenários</title>
+  <style>
+    :root {
+      --ia:#ff4d8d; --fil:#4cc9f0; --psi:#ff9e2c; --neu:#8b5cf6; --bio:#2dd4a0; --fis:#ffd23f;
+      --bg1:#160f2e; --bg2:#2a1a52; --card:rgba(255,255,255,.06); --text:#f3eeff; --muted:#b7a8e0;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:"Segoe UI",system-ui,sans-serif; background:radial-gradient(1200px 700px at 50% -10%,var(--bg2),var(--bg1) 70%);
+      color:var(--text); min-height:100vh; padding:28px 20px 60px; }
+    header { max-width:1400px; margin:0 auto 26px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+    header h1 { font-size:clamp(1.6rem,4vw,2.2rem); }
+    .btn { padding:10px 20px; border:1px solid rgba(255,255,255,.2); border-radius:12px; background:var(--card);
+      color:var(--text); cursor:pointer; font-size:.9rem; transition:all .2s; text-decoration:none; display:inline-flex;
+      align-items:center; gap:8px; font-family:inherit; }
+    .btn:hover { background:rgba(255,255,255,.1); transform:translateY(-2px); }
+    .btn-primary { background:var(--ia); border-color:var(--ia); font-weight:600; }
+    .stats { max-width:1400px; margin:0 auto 24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
+    .stat-card { background:var(--card); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:20px; text-align:center; }
+    .stat-value { font-size:2rem; font-weight:800; margin-bottom:4px; }
+    .stat-label { color:var(--muted); font-size:.85rem; }
+    .grid-2 { max-width:1400px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    @media (max-width:1024px) { .grid-2 { grid-template-columns:1fr; } }
+    .widget { background:var(--card); border:1px solid rgba(255,255,255,.12); border-radius:20px; padding:24px; }
+    .widget-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+    .widget-title { font-size:1.2rem; font-weight:700; }
+    .scenario-list { list-style:none; }
+    .scenario-item { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.1); border-radius:12px;
+      padding:16px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+    .scenario-info { flex:1; }
+    .scenario-title { font-weight:700; margin-bottom:4px; }
+    .scenario-meta { font-size:.85rem; color:var(--muted); }
+    .scenario-actions { display:flex; gap:8px; }
+    .badge { padding:4px 12px; border-radius:999px; font-size:.75rem; font-weight:700; text-transform:uppercase; }
+    .badge.active { background:rgba(45,212,160,.2); color:var(--bio); }
+    .badge.inactive { background:rgba(255,77,141,.2); color:var(--ia); }
+    .form-group { margin-bottom:20px; }
+    .form-label { display:block; margin-bottom:8px; font-size:.9rem; font-weight:600; color:var(--muted); }
+    .form-input, .form-select, .form-textarea { width:100%; padding:12px 16px; background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.15); border-radius:8px; color:var(--text); font-size:.9rem; font-family:inherit; }
+    .form-textarea { min-height:120px; resize:vertical; }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { outline:none; border-color:var(--ia); }
+    .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center;
+      z-index:1000; padding:20px; }
+    .modal.show { display:flex; }
+    .modal-content { background:var(--bg2); border:1px solid rgba(255,255,255,.2); border-radius:20px; padding:32px;
+      max-width:700px; width:100%; max-height:90vh; overflow-y:auto; }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+    .modal-title { font-size:1.4rem; font-weight:700; }
+    .close-btn { background:none; border:none; color:var(--text); font-size:1.8rem; cursor:pointer; padding:0; }
+    .toast { position:fixed; bottom:30px; right:30px; padding:16px 24px; background:var(--bio); border-radius:12px;
+      color:white; font-weight:600; box-shadow:0 8px 24px rgba(0,0,0,.3); opacity:0; transform:translateY(20px);
+      transition:all .3s; z-index:1001; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .toast.error { background:#b91c1c; }
+    .empty-state { color:var(--muted); padding:24px 8px; text-align:center; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📝 Gestão de Cenários</h1>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" id="newScenarioButton" type="button">+ Novo Cenário</button>
+      <a href="?page=admin_dashboard&amp;token=<?= session && session.sessionId ? session.sessionId : '' ?>" class="btn">← Dashboard</a>
+    </div>
+  </header>
+  <div class="stats">
+    <div class="stat-card"><div class="stat-value" id="totalScenarios">0</div><div class="stat-label">Total de Cenários</div></div>
+    <div class="stat-card"><div class="stat-value" id="activeScenarios">0</div><div class="stat-label">Ativos</div></div>
+    <div class="stat-card"><div class="stat-value" id="inactiveScenarios">0</div><div class="stat-label">Inativos</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="widget">
+      <div class="widget-header"><h2 class="widget-title">Cenários Cadastrados</h2></div>
+      <ul class="scenario-list" id="scenarioList"></ul>
+    </div>
+    <div class="widget">
+      <div class="widget-header"><h2 class="widget-title">Estatísticas por Categoria</h2></div>
+      <div id="categoryStats" style="color:var(--muted);font-size:.9rem;" aria-live="polite">Carregando distribuição...</div>
+    </div>
+  </div>
+  <div class="modal" id="modal">
+    <div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title" id="modalTitle">Novo Cenário</h2><button class="close-btn" id="closeModalButton" type="button" aria-label="Fechar">×</button></div>
+      <form id="scenarioForm">
+        <input type="hidden" id="scenarioId">
+        <div class="form-group"><label class="form-label" for="title">Título do Cenário</label><input inputmode="text" type="text" class="form-input" id="title" minlength="3" maxlength="160" required></div>
+        <div class="form-group"><label class="form-label" for="narrative">Narrativa</label><textarea class="form-textarea" id="narrative" minlength="10" maxlength="6000" required></textarea></div>
+        <div class="form-group"><label class="form-label" for="category">Categoria</label><select class="form-select" id="category"><option value="bioetica">Bioética</option><option value="ia_etica">IA &amp; Ética</option><option value="sociedade">Sociedade Digital</option><option value="ciencia">Ciência de Fronteira</option></select></div>
+        <div class="form-group"><label class="form-label" for="difficulty">Dificuldade (1-4)</label><select class="form-select" id="difficulty"><option value="1">1 - Iniciante</option><option value="2">2 - Intermediário</option><option value="3">3 - Avançado</option><option value="4">4 - Expert</option></select></div>
+        <div style="display:flex;gap:12px;"><button type="submit" class="btn btn-primary" id="saveScenarioButton" style="flex:1;">Salvar Cenário</button><button type="button" class="btn" id="cancelScenarioButton">Cancelar</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var scenarios = [];
+
+    function showToast(message, isError) {
+      var toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.toggle('error', !!isError);
+      toast.classList.add('show');
+      setTimeout(function() { toast.classList.remove('show'); }, 3200);
+    }
+
+    function responseData(result) {
+      if (!result || !result.success) throw new Error(result && result.error ? result.error : 'Não foi possível concluir a operação.');
+      return Array.isArray(result.data) ? result.data : [];
+    }
+
+    function updateStats(items) {
+      document.getElementById('totalScenarios').textContent = items.length;
+      document.getElementById('activeScenarios').textContent = items.filter(function(item) { return item.active; }).length;
+      document.getElementById('inactiveScenarios').textContent = items.filter(function(item) { return !item.active; }).length;
+      var counts = {};
+      items.forEach(function(item) { counts[item.category] = (counts[item.category] || 0) + 1; });
+      var stats = document.getElementById('categoryStats');
+      stats.innerHTML = '';
+      if (!Object.keys(counts).length) { stats.textContent = 'Nenhum cenário cadastrado.'; return; }
+      var list = document.createElement('ul');
+      Object.keys(counts).sort().forEach(function(category) {
+        var row = document.createElement('li');
+        row.textContent = category + ': ' + counts[category] + ' cenário(s)';
+        list.appendChild(row);
+      });
+      stats.appendChild(list);
+    }
+
+    function renderScenarios(items) {
+      scenarios = items;
+      var list = document.getElementById('scenarioList');
+      list.innerHTML = '';
+      if (!items.length) {
+        var empty = document.createElement('li');
+        empty.className = 'empty-state';
+        empty.textContent = 'Nenhum cenário cadastrado. Use “Novo Cenário” para começar.';
+        list.appendChild(empty);
+      }
+      items.forEach(function(item) {
+        var row = document.createElement('li'); row.className = 'scenario-item';
+        var info = document.createElement('div'); info.className = 'scenario-info';
+        var title = document.createElement('div'); title.className = 'scenario-title'; title.textContent = item.title;
+        var meta = document.createElement('div'); meta.className = 'scenario-meta'; meta.textContent = 'Categoria: ' + item.category + ' | Dificuldade: ' + item.difficulty;
+        info.appendChild(title); info.appendChild(meta);
+        var actions = document.createElement('div'); actions.className = 'scenario-actions';
+        var badge = document.createElement('span'); badge.className = 'badge ' + (item.active ? 'active' : 'inactive'); badge.textContent = item.active ? 'Ativo' : 'Inativo';
+        var edit = document.createElement('button'); edit.type = 'button'; edit.className = 'btn'; edit.textContent = 'Editar'; edit.dataset.action = 'edit'; edit.dataset.id = item.id;
+        var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'btn'; toggle.textContent = item.active ? 'Desativar' : 'Ativar'; toggle.dataset.action = 'toggle'; toggle.dataset.id = item.id;
+        actions.appendChild(badge); actions.appendChild(edit); actions.appendChild(toggle);
+        row.appendChild(info); row.appendChild(actions); list.appendChild(row);
+      });
+      updateStats(items);
+    }
+
+    function openModal(item) {
+      document.getElementById('scenarioForm').reset();
+      document.getElementById('scenarioId').value = item ? item.id : '';
+      document.getElementById('title').value = item ? item.title : '';
+      document.getElementById('narrative').value = item ? item.narrative : '';
+      document.getElementById('category').value = item ? item.category : 'bioetica';
+      document.getElementById('difficulty').value = item ? String(item.difficulty) : '1';
+      document.getElementById('modalTitle').textContent = item ? 'Editar Cenário' : 'Novo Cenário';
+      document.getElementById('modal').classList.add('show');
+      document.getElementById('title').focus();
+    }
+
+    function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+    function loadScenarios() {
+      document.getElementById('scenarioList').textContent = 'Carregando cenários...';
+      if (!authToken || typeof google === 'undefined' || !google.script || !google.script.run) {
+        showToast('Sessão ou conexão indisponível.', true); return;
+      }
+      google.script.run.withSuccessHandler(function(result) {
+        try { renderScenarios(responseData(result)); } catch (error) { showToast(error.message, true); }
+      }).withFailureHandler(function(error) {
+        showToast(error && error.message ? error.message : 'Falha ao carregar cenários.', true);
+      }).api_getScenarios(authToken);
+    }
+
+    document.getElementById('newScenarioButton').addEventListener('click', function() { openModal(null); });
+    document.getElementById('closeModalButton').addEventListener('click', closeModal);
+    document.getElementById('cancelScenarioButton').addEventListener('click', closeModal);
+    document.getElementById('scenarioList').addEventListener('click', function(event) {
+      var button = event.target.closest('button[data-action]');
+      if (!button) return;
+      var item = scenarios.find(function(current) { return String(current.id) === String(button.dataset.id); });
+      if (!item) return;
+      if (button.dataset.action === 'edit') { openModal(item); return; }
+      button.disabled = true;
+      google.script.run.withSuccessHandler(function(result) {
+        button.disabled = false;
+        try { renderScenarios(responseData(result)); showToast(item.active ? 'Cenário desativado.' : 'Cenário ativado.'); }
+        catch (error) { showToast(error.message, true); }
+      }).withFailureHandler(function(error) {
+        button.disabled = false; showToast(error && error.message ? error.message : 'Falha ao alterar cenário.', true);
+      }).api_setAdminScenarioStatus(authToken, item.id, !item.active);
+    });
+    document.getElementById('scenarioForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      var button = document.getElementById('saveScenarioButton'); button.disabled = true; button.textContent = 'Salvando...';
+      var payload = { id: document.getElementById('scenarioId').value, title: document.getElementById('title').value,
+        narrative: document.getElementById('narrative').value, category: document.getElementById('category').value,
+        difficulty: Number(document.getElementById('difficulty').value) };
+      google.script.run.withSuccessHandler(function(result) {
+        button.disabled = false; button.textContent = 'Salvar Cenário';
+        try { renderScenarios(responseData(result)); closeModal(); showToast('Cenário salvo.'); }
+        catch (error) { showToast(error.message, true); }
+      }).withFailureHandler(function(error) {
+        button.disabled = false; button.textContent = 'Salvar Cenário'; showToast(error && error.message ? error.message : 'Falha ao salvar cenário.', true);
+      }).api_saveAdminScenario(authToken, payload);
+    });
+    loadScenarios();
+  </script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Notificações</title>
+  <style>
+    :root { color-scheme:dark; font-family:Inter,system-ui,sans-serif; --bg:#100b1b; --surface:#1c1430; --text:#f6f0ff; --muted:#c9bddb; --accent:#a78bfa; --border:#493865; --success:#2dd4a0; }
+    * { box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); margin:0; min-width:320px; }
+    main { margin:auto; max-width:840px; padding:24px; }
+    a { color:var(--accent); }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; margin:18px 0; padding:20px; }
+    .toolbar, .actions { align-items:center; display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; }
+    select, button { background:#151020; border:1px solid var(--border); border-radius:10px; color:var(--text); font:inherit; min-height:48px; padding:10px 12px; }
+    button.primary { background:var(--accent); color:#160d27; font-weight:800; }
+    .preferences { display:grid; gap:10px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .preferences label { align-items:center; display:flex; gap:10px; min-height:44px; }
+    .notification { border-top:1px solid var(--border); padding:16px 0; }
+    .notification:first-child { border-top:0; }
+    .notification[data-read="true"] { opacity:.7; }
+    .notification h3, .notification p { margin:4px 0; }
+    .meta, .empty { color:var(--muted); }
+    .badge { background:var(--success); border-radius:999px; color:#08251c; display:inline-block; font-weight:800; padding:4px 9px; }
+    @media (max-width:560px) { main{padding:16px}.toolbar,.actions{align-items:stretch;flex-direction:column}.preferences{grid-template-columns:1fr}button,select{width:100%} }
+  </style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 48px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+</head>
+<body>
+  <main>
+    <a id="backLink" target="_top" href="?page=profile">← Voltar ao perfil</a>
+    <div class="toolbar">
+      <h1>Notificações <span id="unreadBadge" class="badge">0</span></h1>
+      <label for="typeFilter">Filtrar
+        <select id="typeFilter"><option value="all">Todas</option><option value="achievement">Conquistas</option><option value="result">Resultados</option><option value="reminder">Lembretes</option></select>
+      </label>
+    </div>
+
+    <section class="card" aria-labelledby="preferenceTitle">
+      <h2 id="preferenceTitle">Preferências</h2>
+      <form id="preferenceForm">
+        <div class="preferences">
+          <label><input id="prefEmail" type="checkbox"> Receber por e-mail</label>
+          <label><input id="prefAchievements" type="checkbox"> Conquistas</label>
+          <label><input id="prefResults" type="checkbox"> Resultados</label>
+          <label><input id="prefReminders" type="checkbox"> Lembretes</label>
+        </div>
+        <button class="primary" type="submit">Salvar preferências</button>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="historyTitle">
+      <div class="actions"><h2 id="historyTitle">Histórico</h2><button id="markAll" type="button">Marcar exibidas como lidas</button></div>
+      <p id="notificationStatus" role="status" aria-live="polite">Carregando notificações…</p>
+      <div id="notificationList"></div>
+    </section>
+  </main>
+  <script>
+  (function () {
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var STORAGE_KEY = 'alquimia_read_notifications_v1';
+    var items = [];
+    var status = document.getElementById('notificationStatus');
+    var list = document.getElementById('notificationList');
+
+    function readIds() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (error) { return []; } }
+    function writeIds(ids) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ids.slice(-500))); } catch (error) {} }
+    function idFor(item, index) { return String(item.LogID || item.id || item.Timestamp || item.timestamp || index); }
+    function typeFor(item) {
+      var raw = String(item.Type || item.Action || item.message || item.Message || '').toLowerCase();
+      if (raw.indexOf('achievement') >= 0 || raw.indexOf('conquista') >= 0) return 'achievement';
+      if (raw.indexOf('result') >= 0 || raw.indexOf('resultado') >= 0) return 'result';
+      return 'reminder';
+    }
+    function render() {
+      var filter = document.getElementById('typeFilter').value;
+      var read = readIds();
+      var visible = items.filter(function (item) { return filter === 'all' || typeFor(item) === filter; });
+      list.replaceChildren();
+      visible.forEach(function (item, index) {
+        var id = idFor(item, index);
+        var article = document.createElement('article');
+        article.className = 'notification';
+        article.dataset.read = String(read.indexOf(id) >= 0);
+        article.dataset.notificationId = id;
+        var title = document.createElement('h3');
+        title.textContent = String(item.Title || item.Action || item.Type || 'Atualização');
+        var message = document.createElement('p');
+        message.textContent = String(item.Message || item.message || item.Details || 'Notificação registrada pelo sistema.');
+        var meta = document.createElement('p');
+        meta.className = 'meta';
+        meta.textContent = String(item.Timestamp || item.timestamp || 'Data não informada');
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = read.indexOf(id) >= 0 ? 'Marcar como não lida' : 'Marcar como lida';
+        button.addEventListener('click', function () {
+          var saved = readIds();
+          var position = saved.indexOf(id);
+          if (position >= 0) saved.splice(position, 1); else saved.push(id);
+          writeIds(saved); render();
+        });
+        article.append(title, message, meta, button);
+        list.appendChild(article);
+      });
+      var unread = items.filter(function (item, index) { return read.indexOf(idFor(item, index)) < 0; }).length;
+      document.getElementById('unreadBadge').textContent = String(unread);
+      status.textContent = visible.length ? visible.length + ' notificação(ões) exibida(s).' : 'Nenhuma notificação neste filtro.';
+    }
+    function loaded(result) {
+      if (!result || !result.success) { status.textContent = result && result.error ? result.error : 'Não foi possível carregar as notificações.'; return; }
+      items = Array.isArray(result.data.items) ? result.data.items : [];
+      var prefs = result.data.preferences || {};
+      document.getElementById('prefEmail').checked = prefs.email === true;
+      document.getElementById('prefAchievements').checked = prefs.achievements !== false;
+      document.getElementById('prefResults').checked = prefs.results !== false;
+      document.getElementById('prefReminders').checked = prefs.reminders !== false;
+      render();
+    }
+
+    document.getElementById('backLink').href = '?page=profile&token=' + encodeURIComponent(authToken);
+    document.getElementById('typeFilter').addEventListener('change', render);
+    document.getElementById('markAll').addEventListener('click', function () {
+      var saved = readIds();
+      document.querySelectorAll('[data-notification-id]').forEach(function (node) { if (saved.indexOf(node.dataset.notificationId) < 0) saved.push(node.dataset.notificationId); });
+      writeIds(saved); render();
+    });
+    document.getElementById('preferenceForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!authToken || !window.google || !google.script || !google.script.run) { status.textContent = 'Sessão ou conexão indisponível.'; return; }
+      status.textContent = 'Salvando preferências…';
+      google.script.run
+        .withSuccessHandler(function (result) { status.textContent = result && result.success ? 'Preferências salvas.' : (result && result.error) || 'Não foi possível salvar.'; })
+        .withFailureHandler(function () { status.textContent = 'Falha de comunicação ao salvar.'; })
+        .api_saveNotificationPreferences(authToken, {
+          email:document.getElementById('prefEmail').checked,
+          achievements:document.getElementById('prefAchievements').checked,
+          results:document.getElementById('prefResults').checked,
+          reminders:document.getElementById('prefReminders').checked
+        });
+    });
+
+    if (!authToken || !window.google || !google.script || !google.script.run) { status.textContent = 'Sessão ou conexão indisponível.'; return; }
+    google.script.run.withSuccessHandler(loaded).withFailureHandler(function () { status.textContent = 'Falha de comunicação ao carregar.'; }).api_getNotificationCenter(authToken);
+  }());
+  </script>
+</body>
+</html>

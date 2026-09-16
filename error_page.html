@@ -1,0 +1,225 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — error_page.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Página de erro genérica. Mensagem amigável ao utilizador, botão de voltar e detalhes técnicos (em modo debug para admin).
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Mensagem de erro amigável.
+   • Botão de voltar à página anterior.
+   • Botão de recarregar.
+   • Detalhes técnicos (apenas admin).
+   • Código de erro.
+   • Link para reportar problema.
+   • Sugestão de ação corretiva.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • LoggerService.logError() — registro do erro.
+   • NotificationService.sendAdminAlert() — alerta para admin.
+   • PermissionService.isAdmin() — verificação de acesso a detalhes.
+ * * User-friendly — mensagem compreensível pelo utilizador.
+   Debug mode — detalhes técnicos para admin.
+   Action-oriented — sugestões de ação corretiva.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Erro</title>
+  <style>
+    :root{--ia:#ff4d8d;--fil:#4cc9f0;--bg1:#160f2e;--bg2:#2a1a52;--text:#f3eeff;--muted:#b7a8e0;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:"Segoe UI",system-ui,sans-serif;background:radial-gradient(1200px 700px at 50% -10%,var(--bg2),var(--bg1) 70%);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+    .error-container{max-width:600px;text-align:center;}
+    .error-icon{font-size:6rem;margin-bottom:24px;animation:bounce 2s infinite;}
+    @keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-20px);}}
+    h1{font-size:2.5rem;margin-bottom:12px;}
+    .error-code{color:var(--ia);font-size:1.2rem;font-weight:700;margin-bottom:20px;}
+    .error-message{color:var(--muted);font-size:1.1rem;line-height:1.6;margin-bottom:32px;}
+    .actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:32px;}
+    .btn{padding:12px 28px;border:1px solid rgba(255,255,255,.2);border-radius:12px;background:rgba(255,255,255,.06);color:var(--text);cursor:pointer;font-size:.95rem;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:8px;font-family:inherit;}
+    .btn:hover{background:rgba(255,255,255,.1);transform:translateY(-2px);}
+    .btn-primary{background:var(--ia);border-color:var(--ia);font-weight:600;}
+    .debug-section{margin-top:40px;padding:20px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:12px;text-align:left;display:none;}
+    .debug-section.show{display:block;}
+    .debug-title{font-weight:700;margin-bottom:12px;color:var(--ia);}
+    .debug-content{font-family:monospace;font-size:.85rem;color:var(--muted);line-height:1.6;word-break:break-all;}
+    .suggestions{margin-top:32px;text-align:left;padding:20px;background:rgba(76,201,240,.05);border-left:3px solid var(--fil);border-radius:8px;}
+    .suggestions-title{font-weight:700;margin-bottom:12px;}
+    .suggestions ul{margin-left:20px;color:var(--muted);line-height:1.8;}
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="error-icon">⚠️</div>
+    <h1>Ops! Algo deu errado</h1>
+    <div class="error-code" id="errorCode">ERRO 500</div>
+    <p class="error-message" id="errorMessage">Ocorreu um erro inesperado no sistema. Nossa equipa foi notificada e está a trabalhar para resolver o problema.</p>
+    <div class="actions">
+      <button class="btn btn-primary" onclick="window.top.location.href='<?= getScriptUrl() ?>?page=index'">← Voltar</button>
+      <button class="btn" onclick="window.location.reload()">🔄 Recarregar</button>
+      <a href="?page=index" class="btn">🏠 Ir para Início</a>
+    </div>
+    <div class="suggestions">
+      <div class="suggestions-title">💡 Sugestões:</div>
+      <ul id="suggestions">
+        <li>Verifique sua conexão com a internet</li>
+        <li>Tente recarregar a página</li>
+        <li>Limpe o cache do navegador</li>
+        <li>Se o problema persistir, entre em contacto com o suporte</li>
+      </ul>
+    </div>
+    <div class="debug-section" id="debugSection">
+      <div class="debug-title">🔧 Detalhes Técnicos (Admin)</div>
+      <div class="debug-content" id="debugContent">
+        Timestamp: <span id="timestamp"></span><br>
+        Error Type: <span id="errorType">UnknownError</span><br>
+        Stack Trace: <span id="stackTrace">N/A</span><br>
+        User Agent: <span id="userAgent"></span><br>
+        URL: <span id="errorUrl"></span>
+      </div>
+    </div>
+  </div>
+  <script>
+    var urlParams=new URLSearchParams(window.location.search);
+    var errorCode=urlParams.get('code')||'500';
+    var errorMsg=urlParams.get('message')||'Ocorreu um erro inesperado no sistema.';
+    var isAdmin=urlParams.get('debug')==='1';
+    document.getElementById('errorCode').textContent='ERRO '+errorCode;
+    document.getElementById('errorMessage').textContent=errorMsg;
+    if(isAdmin){
+      document.getElementById('debugSection').classList.add('show');
+      document.getElementById('timestamp').textContent=new Date().toISOString();
+      document.getElementById('userAgent').textContent=navigator.userAgent;
+      document.getElementById('errorUrl').textContent=window.location.href;
+      if(typeof google!=='undefined'&&google.script&&google.script.run){
+        google.script.run.withSuccessHandler(function(){}).api_logError({code:errorCode,message:errorMsg,timestamp:new Date().toISOString()});
+      }
+    }
+    var suggestions={
+      '404':['Verifique se o URL está correto','Utilize o menu de navegação','Procure a página desejada no mapa do site'],
+      '403':['Verifique se tem permissões adequadas','Faça login novamente','Contacte o administrador para acesso'],
+      '500':['Tente novamente em alguns minutos','Limpe o cache do navegador','Contacte o suporte técnico']
+    };
+    if(suggestions[errorCode]){
+      var list=document.getElementById('suggestions');
+      list.innerHTML='';
+      suggestions[errorCode].forEach(function(s){
+        var li=document.createElement('li');
+        li.textContent=s;
+        list.appendChild(li);
+      });
+    }
+  </script>
+</body>
+</html>

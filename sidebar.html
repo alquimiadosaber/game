@@ -1,0 +1,87 @@
+<style id="alquimia-sidebar-style">
+  .alquimia-sidebar { background:#171126; border:1px solid #42345f; border-radius:16px; color:#f5f1ff; padding:16px; }
+  .alquimia-sidebar__header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .alquimia-sidebar__header h2 { font-size:1rem; margin:0; }
+  .alquimia-sidebar__toggle { background:#7c3aed; border:0; border-radius:10px; color:#fff; min-height:48px; min-width:48px; }
+  .alquimia-sidebar__progress { background:#312447; border-radius:999px; height:8px; margin:14px 0; overflow:hidden; }
+  .alquimia-sidebar__progress span { background:#2dd4a0; display:block; height:100%; transition:width .2s ease; width:0; }
+  .alquimia-sidebar nav { display:grid; gap:8px; }
+  .alquimia-sidebar a { border-radius:10px; color:#e8ddff; display:block; min-height:44px; padding:12px; text-decoration:none; }
+  .alquimia-sidebar a:hover, .alquimia-sidebar a:focus-visible { background:#2d2140; outline:2px solid #b9f7df; }
+  .alquimia-sidebar[data-collapsed="true"] nav, .alquimia-sidebar[data-collapsed="true"] .alquimia-sidebar__summary { display:none; }
+  @media (max-width:480px) { .alquimia-sidebar { border-radius:12px; padding:12px; } }
+  @media (prefers-reduced-motion:reduce) { .alquimia-sidebar__progress span { transition:none; } }
+</style>
+
+<aside id="alquimia-sidebar" class="alquimia-sidebar" aria-label="Navegação principal" data-collapsed="false">
+  <div class="alquimia-sidebar__header">
+    <h2>Alquimia do Saber</h2>
+    <button id="alquimia-sidebar-toggle" class="alquimia-sidebar__toggle" type="button" aria-expanded="true" aria-controls="alquimia-sidebar-links">
+      <span aria-hidden="true">☰</span><span class="sr-only">Alternar menu</span>
+    </button>
+  </div>
+  <div class="alquimia-sidebar__summary">
+    <p id="alquimia-sidebar-status" role="status" aria-live="polite">Carregando navegação…</p>
+    <div class="alquimia-sidebar__progress" aria-hidden="true"><span id="alquimia-sidebar-progress"></span></div>
+  </div>
+  <nav id="alquimia-sidebar-links"></nav>
+</aside>
+
+<script>
+(function () {
+  var root = document.getElementById('alquimia-sidebar');
+  var links = document.getElementById('alquimia-sidebar-links');
+  var status = document.getElementById('alquimia-sidebar-status');
+  var progress = document.getElementById('alquimia-sidebar-progress');
+  var labels = {
+    laboratory:'Laboratório', scenario_list:'Cenários', scenario_history:'Histórico',
+    progression_tree:'Progressão', result_dashboard:'Resultados', vocation_list:'Vocações',
+    domain_map:'Mapa de domínios', profile:'Perfil', settings:'Preferências',
+    notification_panel:'Notificações', search_results:'Busca', admin_dashboard:'Administração'
+  };
+  var preferredOrder = Object.keys(labels);
+
+  function token() {
+    var queryToken = new URLSearchParams(location.search).get('token');
+    if (queryToken) return queryToken;
+    try { return localStorage.getItem('alquimia_session_token') || ''; } catch (error) { return ''; }
+  }
+
+  function render(result) {
+    if (!result || !result.success) {
+      status.textContent = result && result.error ? result.error : 'Navegação indisponível.';
+      return;
+    }
+    var data = result.data || {};
+    var allowed = Array.isArray(data.routes) ? data.routes : [];
+    links.replaceChildren();
+    preferredOrder.forEach(function (route) {
+      if (allowed.indexOf(route) < 0) return;
+      var anchor = document.createElement('a');
+      var params = new URLSearchParams({ page:route, token:token() });
+      anchor.href = '?' + params.toString();
+      anchor.target = '_top';
+      anchor.textContent = labels[route];
+      links.appendChild(anchor);
+    });
+    var percent = Math.max(0, Math.min(100, Number(data.progressPercent || 0)));
+    progress.style.width = percent + '%';
+    status.textContent = 'Progresso geral: ' + Math.round(percent) + '%.';
+  }
+
+  document.getElementById('alquimia-sidebar-toggle').addEventListener('click', function () {
+    var collapsed = root.dataset.collapsed !== 'true';
+    root.dataset.collapsed = String(collapsed);
+    this.setAttribute('aria-expanded', String(!collapsed));
+  });
+
+  if (!token() || !window.google || !google.script || !google.script.run) {
+    status.textContent = 'Entre para carregar sua navegação.';
+    return;
+  }
+  google.script.run
+    .withSuccessHandler(render)
+    .withFailureHandler(function () { status.textContent = 'Falha de comunicação ao carregar o menu.'; })
+    .api_getSidebarData(token());
+}());
+</script>

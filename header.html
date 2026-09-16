@@ -1,0 +1,194 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — header.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Barra superior (navbar) do sistema. Exibe logo Alquimia do Saber, nome do utilizador, menu de navegação primária e botão de logout.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Logo e nome da aplicação.
+   • Nome do utilizador autenticado (scriptlet <?= data.userName ?>).
+   • Menu de navegação primária (Laboratório, Resultados, Perfil).
+   • Menu administrativo (apenas para role=admin).
+   • Botão de logout com confirmação.
+   • Indicador de XP e nível (gamificação).
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • AuthService.logout(sessionId) — ação de logout.
+   • UserProfileService.getStatistics(userId) — XP e nível.
+   • PermissionService.getAccessibleRoutes(role) — menu adaptativo.
+ * * Role-based navigation — menu se adapta ao papel.
+   Responsive design — adaptável a dispositivos móveis.
+   Session-aware — exibe dados do utilizador autenticado.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{--ia:#ff4d8d;--fil:#4cc9f0;--psi:#ff9e2c;--neu:#8b5cf6;--bg1:#160f2e;--bg2:#2a1a52;--text:#f3eeff;--muted:#b7a8e0;}
+    .header{background:rgba(0,0,0,.3);border-bottom:1px solid rgba(255,255,255,.1);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);}
+    .logo{display:flex;align-items:center;gap:10px;font-size:1.2rem;font-weight:800;color:var(--text);text-decoration:none;}
+    .logo .icon{font-size:1.4rem;}
+    .nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .nav a{padding:8px 16px;border-radius:999px;color:var(--text);text-decoration:none;font-size:.9rem;transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
+    .nav a:hover{background:rgba(255,255,255,.1);}
+    .nav a.active{background:var(--ia);font-weight:600;}
+    .user-menu{position:relative;display:flex;align-items:center;gap:12px;}
+    .user-btn{padding:8px 16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:999px;color:var(--text);cursor:pointer;font-size:.9rem;display:flex;align-items:center;gap:8px;transition:all .2s;}
+    .user-btn:hover{background:rgba(255,255,255,.1);}
+    .user-avatar{width:32px;height:32px;border-radius:50%;background:var(--ia);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;}
+    .xp-badge{padding:4px 10px;background:rgba(255,215,0,.15);border:1px solid rgba(255,215,0,.3);border-radius:999px;font-size:.75rem;font-weight:700;color:#ffd700;}
+    .dropdown{position:absolute;top:calc(100% + 8px);right:0;background:rgba(30,20,40,.95);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:8px;min-width:180px;display:none;box-shadow:0 8px 24px rgba(0,0,0,.5);backdrop-filter:blur(10px);}
+    .dropdown.show{display:block;}
+    .dropdown a{display:block;padding:10px 14px;border-radius:8px;color:var(--text);text-decoration:none;font-size:.9rem;transition:background .2s;}
+    .dropdown a:hover{background:rgba(255,255,255,.1);}
+    .dropdown hr{border:none;border-top:1px solid rgba(255,255,255,.1);margin:8px 0;}
+    @media (max-width:768px){.nav{display:none;}.header{justify-content:space-between;}}
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <a href="?page=index" class="logo" target="_top"><span class="icon">🧪</span><span>Alquimia do Saber</span></a>
+    <nav class="nav" id="mainNav">
+      <a href="?page=laboratory" target="_top">🔬 Laboratório</a>
+      <a href="?page=domain_map" target="_top">🗺️ Domínios</a>
+      <a href="?page=vocation_list" target="_top">📚 Vocações</a>
+      <a href="?page=result_dashboard" target="_top">📊 Resultados</a>
+      <a href="?page=help" target="_top">❓ Ajuda</a>
+    </nav>
+    <div class="user-menu" id="userMenu">
+      <span class="xp-badge" id="xpBadge">⭐ 0 XP</span>
+      <div class="user-btn" onclick="toggleDropdown()">
+        <div class="user-avatar" id="userAvatar">U</div>
+        <span id="userName">Utilizador</span>
+        <span>▼</span>
+      </div>
+      <div class="dropdown" id="userDropdown">
+        <a href="?page=profile" target="_top">👤 Perfil</a>
+        <a href="?page=settings" target="_top">⚙️ Configurações</a>
+        <a href="?page=achievement" target="_top">🏆 Conquistas</a>
+        <hr>
+        <a href="?page=admin_dashboard" target="_top" id="adminLink" style="display:none;">🔧 Admin</a>
+        <a href="?page=login" target="_top" onclick="logout();return false;">🚪 Sair</a>
+      </div>
+    </div>
+  </header>
+  <script>
+    function toggleDropdown(){var d=document.getElementById('userDropdown');d.classList.toggle('show');}
+    document.addEventListener('click',function(e){var menu=document.getElementById('userMenu');if(!menu.contains(e.target)){document.getElementById('userDropdown').classList.remove('show');}});
+    function logout(){if(confirm('Tem certeza que deseja sair do laboratório?')){try{localStorage.removeItem('alquimia_session_token');}catch(e){}window.top.location.href='?page=login';}}
+    function loadUserData(){if(typeof google!=='undefined'&&google.script&&google.script.run){var token='';try{token=localStorage.getItem('alquimia_session_token')||'';}catch(e){}google.script.run.withSuccessHandler(function(r){if(r&&r.success&&r.data){var u=r.data;document.getElementById('userName').textContent=u.fullName||u.name||'Utilizador';document.getElementById('userAvatar').textContent=(u.fullName||u.name||'U').charAt(0).toUpperCase();document.getElementById('xpBadge').textContent='⭐ '+(u.xp||0)+' XP';if(u.role==='admin'){document.getElementById('adminLink').style.display='block';}}}).withFailureHandler(function(){document.getElementById('userName').textContent='Sessão indisponível';}).api_getUserProfile(token);}else{document.getElementById('userName').textContent='Sessão indisponível';document.getElementById('userAvatar').textContent='?';}}
+    loadUserData();
+  </script>
+</body>
+</html>

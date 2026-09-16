@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Preferências</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #160f2e;
+      --surface: #241943;
+      --surface-strong: #30235a;
+      --text: #f5f2ff;
+      --muted: #c4b9e2;
+      --accent: #ff4d8d;
+      --accent-strong: #e33476;
+      --focus: #4cc9f0;
+      --border: rgba(255,255,255,.16);
+      --success: #2dd4a0;
+      --danger: #ff8b8b;
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f5f1ff;
+      --surface: #ffffff;
+      --surface-strong: #eee7ff;
+      --text: #24163f;
+      --muted: #625577;
+      --border: rgba(36,22,63,.18);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; }
+    a { color: inherit; }
+    button, select, input { font: inherit; }
+    button, select, .back-link { min-height: 48px; }
+    button, .back-link { border: 1px solid var(--border); border-radius: 12px; padding: .75rem 1rem; cursor: pointer; }
+    button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    .topbar { border-bottom: 1px solid var(--border); background: var(--surface); }
+    .topbar-inner, main { width: min(920px, calc(100% - 32px)); margin: 0 auto; }
+    .topbar-inner { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { margin: 0; font-size: clamp(1.15rem, 4vw, 1.55rem); }
+    .back-link { display: inline-flex; align-items: center; text-decoration: none; }
+    main { padding: 32px 0 64px; }
+    .intro { margin-bottom: 24px; }
+    .intro h1 { margin: 0 0 8px; font-size: clamp(1.8rem, 7vw, 2.7rem); }
+    .intro p { margin: 0; color: var(--muted); line-height: 1.55; }
+    form { display: grid; gap: 20px; }
+    fieldset { margin: 0; padding: 22px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); }
+    legend { padding: 0 8px; font-size: 1.15rem; font-weight: 700; }
+    .helper { color: var(--muted); line-height: 1.5; margin: 0 0 16px; }
+    .option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .option { display: flex; align-items: flex-start; gap: 12px; min-height: 54px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); }
+    .option input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--accent); }
+    .option span { line-height: 1.35; }
+    .option small { display: block; margin-top: 3px; color: var(--muted); }
+    .field { display: grid; gap: 8px; max-width: 440px; }
+    .field + .field { margin-top: 18px; }
+    .field label { font-weight: 650; }
+    select { width: 100%; padding: 0 12px; color: var(--text); background: var(--surface-strong); border: 1px solid var(--border); border-radius: 10px; }
+    .privacy-note { padding: 14px; border-left: 4px solid var(--focus); border-radius: 8px; background: var(--surface-strong); line-height: 1.5; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .primary { border-color: var(--accent); background: var(--accent); color: white; font-weight: 700; }
+    .primary:hover { background: var(--accent-strong); }
+    .secondary { background: var(--surface); color: var(--text); }
+    .danger { border-color: rgba(255,139,139,.55); color: var(--danger); background: transparent; }
+    button:disabled, select:disabled, input:disabled { cursor: wait; opacity: .58; }
+    .status { min-height: 24px; margin: 0; color: var(--muted); }
+    .status.success { color: var(--success); }
+    .status.error { color: var(--danger); }
+    .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    @media (max-width: 620px) {
+      .topbar-inner { align-items: flex-start; padding: 14px 0; }
+      .option-grid { grid-template-columns: 1fr; }
+      .actions { align-items: stretch; flex-direction: column; }
+      .actions button { width: 100%; }
+    }
+  </style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 48px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <p class="brand">⚗️ Alquimia do Saber</p>
+      <a class="back-link" target="_top" href="?page=profile&amp;token=<?= session && session.sessionId ? session.sessionId : '' ?>">← Voltar ao perfil</a>
+    </div>
+  </header>
+
+  <main id="settings-container">
+    <section class="intro" aria-labelledby="settings-title">
+      <h1 id="settings-title">Suas preferências</h1>
+      <p>Escolha os domínios que deseja explorar e como quer receber avisos. As preferências pedagógicas ficam vinculadas à sua conta; aparência e movimento ficam somente neste navegador.</p>
+    </section>
+
+    <form id="settings-form" aria-describedby="settings-status">
+      <fieldset>
+        <legend>Domínios de interesse</legend>
+        <p class="helper">Marque ao menos um domínio. Eles orientam recomendações de cenários e vocações.</p>
+        <div class="option-grid">
+          <label class="option"><input type="checkbox" name="domain" value="A"><span>A — Investigação<small>Problemas, evidências e hipóteses.</small></span></label>
+          <label class="option"><input type="checkbox" name="domain" value="B"><span>B — Criação<small>Imaginação, linguagem e expressão.</small></span></label>
+          <label class="option"><input type="checkbox" name="domain" value="C"><span>C — Cuidado<small>Bem-estar, escuta e relações.</small></span></label>
+          <label class="option"><input type="checkbox" name="domain" value="D"><span>D — Organização<small>Planejamento, sistemas e decisões.</small></span></label>
+          <label class="option"><input type="checkbox" name="domain" value="E"><span>E — Natureza<small>Vida, ambiente e sustentabilidade.</small></span></label>
+          <label class="option"><input type="checkbox" name="domain" value="F"><span>F — Tecnologia<small>Ferramentas, lógica e prototipagem.</small></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Notificações</legend>
+        <p class="helper">Você pode mudar estas escolhas a qualquer momento.</p>
+        <div class="option-grid">
+          <label class="option"><input type="checkbox" name="notification" value="email"><span>Resumo por e-mail<small>Novidades e atividades importantes.</small></span></label>
+          <label class="option"><input type="checkbox" name="notification" value="achievements"><span>Conquistas<small>Avise quando uma medalha for desbloqueada.</small></span></label>
+          <label class="option"><input type="checkbox" name="notification" value="results"><span>Resultados<small>Avise quando uma análise estiver pronta.</small></span></label>
+          <label class="option"><input type="checkbox" name="notification" value="reminders"><span>Lembretes<small>Convites para retomar uma jornada.</small></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Aparência e acessibilidade</legend>
+        <div class="field">
+          <label for="theme">Tema</label>
+          <select id="theme" name="theme">
+            <option value="dark">Escuro</option>
+            <option value="light">Claro</option>
+            <option value="system">Seguir o dispositivo</option>
+          </select>
+        </div>
+        <label class="option field"><input id="reduce-motion" type="checkbox"><span>Reduzir movimentos<small>Desativa animações e transições neste navegador.</small></span></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Privacidade e recomeço</legend>
+        <p class="privacy-note">Seu perfil detalhado exige uma sessão autenticada. As páginas públicas não recebem suas dimensões, preferências ou histórico.</p>
+        <button class="danger" id="reset-dimensions" type="button">Zerar meu vetor de dimensões</button>
+      </fieldset>
+
+      <div class="actions">
+        <button class="primary" id="save-settings" type="submit">Salvar preferências</button>
+        <button class="secondary" id="restore-local" type="button">Restaurar aparência padrão</button>
+      </div>
+      <p class="status" id="settings-status" role="status" aria-live="polite">Carregando preferências…</p>
+    </form>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+      var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+      var LOCAL_KEY = 'alquimia_user_interface_preferences';
+      var form = document.getElementById('settings-form');
+      var status = document.getElementById('settings-status');
+      var controls = Array.prototype.slice.call(form.querySelectorAll('button, input, select'));
+
+      function setBusy(busy, message) {
+        controls.forEach(function (control) { control.disabled = busy; });
+        status.className = 'status';
+        status.textContent = message || '';
+        form.setAttribute('aria-busy', String(busy));
+      }
+
+      function showStatus(message, type) {
+        status.className = 'status' + (type ? ' ' + type : '');
+        status.textContent = message;
+      }
+
+      function localPreferences() {
+        try {
+          var stored = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}');
+          return {
+            theme: ['dark', 'light', 'system'].indexOf(stored.theme) >= 0 ? stored.theme : 'dark',
+            reduceMotion: stored.reduceMotion === true
+          };
+        } catch (error) {
+          return { theme: 'dark', reduceMotion: false };
+        }
+      }
+
+      function applyLocal(preferences) {
+        var theme = preferences.theme;
+        var effective = theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : theme;
+        document.documentElement.dataset.theme = effective === 'light' ? 'light' : 'dark';
+        document.documentElement.classList.toggle('reduce-motion', preferences.reduceMotion === true);
+        document.getElementById('theme').value = theme;
+        document.getElementById('reduce-motion').checked = preferences.reduceMotion === true;
+      }
+
+      function saveLocal() {
+        var preferences = {
+          theme: document.getElementById('theme').value,
+          reduceMotion: document.getElementById('reduce-motion').checked
+        };
+        try { localStorage.setItem(LOCAL_KEY, JSON.stringify(preferences)); } catch (error) { /* Preferencia ainda vale nesta pagina. */ }
+        applyLocal(preferences);
+      }
+
+      function setServerControlsDisabled(disabled) {
+        form.querySelectorAll('input[name="domain"], input[name="notification"], #save-settings, #reset-dimensions').forEach(function (control) {
+          control.disabled = disabled;
+        });
+      }
+
+      function requireResult(result) {
+        if (!result || !result.success) throw new Error(result && result.error ? result.error : 'Resposta inválida do servidor.');
+        return result.data || {};
+      }
+
+      function checkedValues(name) {
+        return Array.prototype.map.call(form.querySelectorAll('input[name="' + name + '"]:checked'), function (input) { return input.value; });
+      }
+
+      function renderServerSettings(data) {
+        var domains = Array.isArray(data.preferredDomains) ? data.preferredDomains : [];
+        form.querySelectorAll('input[name="domain"]').forEach(function (input) { input.checked = domains.indexOf(input.value) >= 0; });
+        var notifications = data.notificationPreferences || {};
+        form.querySelectorAll('input[name="notification"]').forEach(function (input) { input.checked = notifications[input.value] !== false; });
+      }
+
+      function loadSettings() {
+        applyLocal(localPreferences());
+        if (!authToken || !window.google || !google.script || !google.script.run) {
+          setBusy(false);
+          setServerControlsDisabled(true);
+          showStatus('A sessão não está disponível. Entre novamente para editar preferências.', 'error');
+          return;
+        }
+        setBusy(true, 'Carregando preferências…');
+        google.script.run.withSuccessHandler(function (result) {
+          try {
+            renderServerSettings(requireResult(result));
+            setBusy(false);
+            showStatus('Preferências carregadas.');
+          } catch (error) {
+            setBusy(false);
+            showStatus(error.message, 'error');
+          }
+        }).withFailureHandler(function (error) {
+          setBusy(false);
+          showStatus(error && error.message ? error.message : 'Não foi possível carregar as preferências.', 'error');
+        }).api_getUserSettings(authToken);
+      }
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var domains = checkedValues('domain');
+        if (!domains.length) {
+          showStatus('Escolha ao menos um domínio de interesse.', 'error');
+          return;
+        }
+        var enabledNotifications = checkedValues('notification');
+        var notifications = {};
+        ['email', 'achievements', 'results', 'reminders'].forEach(function (key) { notifications[key] = enabledNotifications.indexOf(key) >= 0; });
+        setBusy(true, 'Salvando preferências…');
+        google.script.run.withSuccessHandler(function (result) {
+          try {
+            renderServerSettings(requireResult(result));
+            saveLocal();
+            setBusy(false);
+            showStatus('Preferências salvas.', 'success');
+          } catch (error) {
+            setBusy(false);
+            showStatus(error.message, 'error');
+          }
+        }).withFailureHandler(function (error) {
+          setBusy(false);
+          showStatus(error && error.message ? error.message : 'Não foi possível salvar as preferências.', 'error');
+        }).api_saveUserSettings(authToken, { preferredDomains: domains, notificationPreferences: notifications });
+      });
+
+      document.getElementById('restore-local').addEventListener('click', function () {
+        localStorage.removeItem(LOCAL_KEY);
+        applyLocal({ theme: 'dark', reduceMotion: false });
+        showStatus('A aparência padrão foi restaurada.', 'success');
+      });
+
+      document.getElementById('theme').addEventListener('change', function () { applyLocal({ theme: this.value, reduceMotion: document.getElementById('reduce-motion').checked }); });
+      document.getElementById('reduce-motion').addEventListener('change', function () { applyLocal({ theme: document.getElementById('theme').value, reduceMotion: this.checked }); });
+
+      document.getElementById('reset-dimensions').addEventListener('click', function () {
+        if (!window.confirm('Zerar todas as dimensões do seu perfil? Esta ação não apaga a conta nem o histórico.')) return;
+        setBusy(true, 'Zerando dimensões…');
+        google.script.run.withSuccessHandler(function (result) {
+          try {
+            requireResult(result);
+            setBusy(false);
+            showStatus('Seu vetor de dimensões foi zerado.', 'success');
+          } catch (error) {
+            setBusy(false);
+            showStatus(error.message, 'error');
+          }
+        }).withFailureHandler(function (error) {
+          setBusy(false);
+          showStatus(error && error.message ? error.message : 'Não foi possível zerar as dimensões.', 'error');
+        }).api_resetUserDimensions(authToken);
+      });
+
+      loadSettings();
+    })();
+  </script>
+</body>
+</html>

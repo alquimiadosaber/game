@@ -1,0 +1,483 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — result_dashboard.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   O "grande momento" do jogo: revela o Ouro Alquímico do utilizador — a
+ *   ciência híbrida de fronteira mais compatível com seu perfil, alinhada às
+ *   tendências gerais do mercado de trabalho (sem datas específicas). Tubo
+ *   dourado brilhante com a fórmula final, radar SVG dos 8 vectores
+ *   psicométricos, nível de confiança e top-5 vocações alternativas.
+ *
+ * INTEGRAÇÕES (google.script.run — bridge global api_*):
+ *   • api_getResultDashboard() — { recommended, confidence, vectors:{IA,FIL,
+ *     PSI,NEU,BIO,FIS,SOC,ART}, scenariosCompleted, scenariosTotal,
+ *     alternatives: [...] }. Falhas são exibidas sem fabricar dados demo.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas (radar desenhado via SVG
+ *   nativo, sem bibliotecas de gráficos).
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.1.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Seu Resultado</title>
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --gold: #ffd76a;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.06);
+      --text: #f3eeff; --muted: #b7a8e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 700px at 50% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 28px 20px 60px;
+    }
+    .wrap { max-width: 1020px; margin: 0 auto; }
+    .headline { text-align: center; margin-bottom: 24px; }
+    .headline .kicker { color: var(--muted); font-size: .85rem; letter-spacing: 1px; text-transform: uppercase; }
+    .headline h1 {
+      font-size: clamp(1.7rem, 4.5vw, 2.5rem); margin-top: 6px;
+      background: linear-gradient(90deg, var(--gold), var(--ia)); -webkit-background-clip: text;
+      background-clip: text; color: transparent;
+    }
+
+    .hero-grid { display: grid; gap: 24px; grid-template-columns: auto 1fr; align-items: center;
+      background: var(--card); border: 1px solid rgba(255,215,106,.3); border-radius: 26px; padding: 30px;
+      box-shadow: 0 0 50px rgba(255,215,106,.12); }
+    @media (max-width: 700px) { .hero-grid { grid-template-columns: 1fr; justify-items: center; text-align: center; } }
+
+    .gold-tube {
+      position: relative; width: 100px; height: 270px;
+      border: 4px solid rgba(255,215,106,.55); border-top-width: 0;
+      border-radius: 0 0 50px 50px; background: rgba(255,255,255,.04);
+      display: flex; flex-direction: column-reverse; overflow: hidden;
+      box-shadow: inset 0 0 24px rgba(255,215,106,.15), 0 0 40px rgba(255,215,106,.35);
+      animation: glow 3s ease-in-out infinite;
+    }
+    @keyframes glow {
+      0%,100% { box-shadow: inset 0 0 24px rgba(255,215,106,.15), 0 0 30px rgba(255,215,106,.28); }
+      50% { box-shadow: inset 0 0 24px rgba(255,215,106,.22), 0 0 48px rgba(255,215,106,.5); }
+    }
+    .gold-tube::before { content:""; position:absolute; top:0; left:-10px; right:-10px; height:12px;
+      border:4px solid rgba(255,215,106,.55); border-radius:9px; z-index:3; }
+    .gold-tube::after { content:""; position:absolute; top:6%; left:13%; width:15px; height:82%;
+      background: linear-gradient(rgba(255,255,255,.55), transparent); border-radius:9px; z-index:3; }
+    .gold-tube .layer { width: 100%; position: relative; }
+    .gold-tube .surface { position: absolute; top: -3px; left: 0; right: 0; height: 6px;
+      background: rgba(255,255,255,.3); border-radius: 50%; filter: blur(1px); }
+    .gold-tube .sparkle { position: absolute; font-size: .8rem; animation: sparkle 2.4s ease-in-out infinite; opacity: 0; }
+    @keyframes sparkle { 0% { opacity: 0; transform: translateY(6px) scale(.6); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px) scale(1); } }
+
+    .confidence-badge {
+      display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 999px;
+      background: rgba(255,215,106,.16); border: 1px solid var(--gold); color: var(--gold);
+      font-weight: 800; font-size: .85rem; margin-bottom: 10px;
+    }
+    .hero-title h2 { font-size: clamp(1.3rem, 3.2vw, 1.85rem); line-height: 1.25; }
+    .hero-title .formula-row { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    @media (max-width: 700px) { .hero-title .formula-row { justify-content: center; } }
+    .pill { padding: 4px 12px; border-radius: 999px; color: #1a1033; font-weight: 800; font-size: .84rem; }
+
+    .grid2 { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; margin-top: 22px; }
+    @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid rgba(255,255,255,.12); border-radius: 22px; padding: 24px; }
+    .card h3 { font-size: 1.02rem; margin-bottom: 12px; }
+    .radar-wrap { display: flex; justify-content: center; }
+
+    .alt-list { display: grid; gap: 12px; }
+    .alt-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 16px;
+      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+      cursor: pointer; transition: transform .15s; text-decoration: none; color: var(--text); }
+    .alt-item:hover { transform: translateX(4px); background: rgba(255,255,255,.08); }
+    .alt-rank { font-weight: 800; font-size: 1rem; width: 22px; color: var(--gold); }
+    .mini-tube { flex: 0 0 26px; height: 60px; position: relative;
+      border: 2px solid rgba(255,255,255,.35); border-top-width: 0; border-radius: 0 0 13px 13px;
+      background: rgba(255,255,255,.04); display: flex; flex-direction: column-reverse; overflow: hidden; }
+    .mini-tube .layer { width: 100%; }
+    .alt-info { flex: 1; min-width: 0; }
+    .alt-info .title { font-size: .86rem; font-weight: 700; line-height: 1.3; }
+    .alt-info .compat { font-size: .76rem; color: var(--muted); }
+
+    .completion-row { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+    .ring { width: 64px; height: 64px; border-radius: 50%; flex: 0 0 64px;
+      background: conic-gradient(var(--bio) calc(var(--pct,0) * 1%), rgba(255,255,255,.08) 0);
+      display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .85rem; }
+    .ring span { background: var(--bg1); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+    .actions { margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .btn { padding: 13px 26px; border: 0; border-radius: 999px; font-weight: 800; font-size: .95rem;
+      color: #fff; cursor: pointer; background: linear-gradient(90deg, var(--ia), #c13cff);
+      box-shadow: 0 6px 22px rgba(255,77,141,.4); transition: transform .15s; text-decoration: none; display: inline-block; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-gold { background: linear-gradient(90deg, var(--gold), #ff9e2c); box-shadow: 0 6px 22px rgba(255,215,106,.4); }
+    .btn-ghost { background: transparent; color: var(--fil); border: 2px solid var(--fil); box-shadow: none; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="headline">
+      <div class="kicker">Resumo da exploração</div>
+      <h1>✨ Seu mapa de escolhas ✨</h1>
+    </div>
+
+    <section class="hero-grid">
+      <div class="gold-tube" id="gold-tube"></div>
+      <div class="hero-title">
+        <span class="confidence-badge" id="confidence-badge">Comparando escolhas no modelo…</span>
+        <h2 id="result-title">Carregando seu resultado…</h2>
+        <p style="color:var(--muted); margin-top:6px; font-size:.92rem;" id="result-description"></p>
+        <div class="formula-row" id="formula-row"></div>
+      </div>
+    </section>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Áreas usadas nas suas misturas</h3>
+        <div class="radar-wrap"><svg id="radar" width="280" height="280" viewBox="0 0 280 280"></svg></div>
+      </div>
+
+      <div class="card">
+        <h3>Progresso do simulador</h3>
+        <div class="completion-row">
+          <div class="ring" id="ring" style="--pct:0"><span id="ring-pct">0%</span></div>
+          <p style="color:var(--muted); font-size:.88rem;" id="completion-text">0 de 0 dilemas resolvidos.</p>
+        </div>
+
+        <h3 style="margin-top:22px;">Outras áreas para explorar</h3>
+        <div class="alt-list" id="alt-list"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-gold" id="report-btn">Guardar resumo da exploração 📄</button>
+      <a class="btn" href="?page=vocation_detail" target="_top" id="detail-link">Conhecer este tema</a>
+      <a class="btn btn-ghost" href="?page=scenario_list" target="_top" id="restart-link">Resolver outro cenário</a>
+      <a class="btn btn-ghost" href="?page=scenario_history" target="_top" id="history-link">Conferir minhas tentativas</a>
+    </div>
+  </div>
+
+  <script>
+    var DIM_ORDER = ['IA', 'FIL', 'PSI', 'NEU', 'BIO', 'FIS', 'SOC', 'ART'];
+    var DIM_META = {
+      IA:  { name: 'Inteligência Artificial', varName: '--ia'  },
+      FIL: { name: 'Filosofia',               varName: '--fil' },
+      PSI: { name: 'Psicometria',             varName: '--psi' },
+      NEU: { name: 'Neurociência',            varName: '--neu' },
+      BIO: { name: 'Biologia',                varName: '--bio' },
+      FIS: { name: 'Física',                  varName: '--fis' },
+      SOC: { name: 'Sociologia',              varName: '--soc' },
+      ART: { name: 'Artes',                   varName: '--art' }
+    };
+
+    function parseFormula(formula) {
+      var source = String(formula || '').trim().toUpperCase();
+      var parts = [], match;
+      var fractionPattern = /(\d+)\s*\/\s*4\s*([A-Z]+)/g;
+      var compactPattern = /([A-Z]+)\s*:?\s*(\d+)/g;
+      while ((match = fractionPattern.exec(source)) !== null) parts.push({ dim: match[2], q: parseInt(match[1], 10) });
+      while ((match = compactPattern.exec(source)) !== null) parts.push({ dim: match[1], q: parseInt(match[2], 10) });
+      return parts.filter(function (p) { return DIM_META[p.dim] && p.q > 0; });
+    }
+
+    function fillGoldTube(parts) {
+      var tube = document.getElementById('gold-tube');
+      tube.innerHTML = '';
+      parts.forEach(function (part, i) {
+        var layer = document.createElement('div');
+        layer.className = 'layer';
+        layer.style.height = (part.q * 22) + '%';
+        layer.style.background = 'linear-gradient(rgba(255,255,255,.22), rgba(0,0,0,.1)), var(' + DIM_META[part.dim].varName + ')';
+        layer.title = part.q + '/4 ' + DIM_META[part.dim].name;
+        if (i > 0) {
+          var surface = document.createElement('div');
+          surface.className = 'surface';
+          layer.appendChild(surface);
+        }
+        for (var s = 0; s < 3; s++) {
+          var sparkle = document.createElement('span');
+          sparkle.className = 'sparkle';
+          sparkle.textContent = '✨';
+          sparkle.style.left = (15 + Math.random() * 60) + '%';
+          sparkle.style.bottom = (Math.random() * 80) + '%';
+          sparkle.style.animationDelay = (Math.random() * 2.4) + 's';
+          layer.appendChild(sparkle);
+        }
+        tube.appendChild(layer);
+      });
+    }
+
+    function fillMiniTube(tubeEl, parts) {
+      tubeEl.innerHTML = '';
+      parts.forEach(function (part) {
+        var layer = document.createElement('div');
+        layer.className = 'layer';
+        layer.style.height = (part.q * 22) + '%';
+        layer.style.background = 'linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), var(' + DIM_META[part.dim].varName + ')';
+        tubeEl.appendChild(layer);
+      });
+    }
+
+    // Radar SVG desenhado manualmente (sem bibliotecas): 8 eixos, escala 0-100.
+    function drawRadar(vectors) {
+      var svg = document.getElementById('radar');
+      var ns = 'http://www.w3.org/2000/svg';
+      var cx = 140, cy = 140, maxR = 108;
+      svg.innerHTML = '';
+
+      function pointFor(index, value) {
+        var angle = (Math.PI * 2 * index) / DIM_ORDER.length - Math.PI / 2;
+        var r = (value / 100) * maxR;
+        return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+      }
+
+      // Anéis de referência (25/50/75/100%)
+      [0.25, 0.5, 0.75, 1].forEach(function (frac) {
+        var pts = DIM_ORDER.map(function (_, i) { return pointFor(i, frac * 100).join(','); }).join(' ');
+        var ring = document.createElementNS(ns, 'polygon');
+        ring.setAttribute('points', pts);
+        ring.setAttribute('fill', 'none');
+        ring.setAttribute('stroke', 'rgba(255,255,255,.12)');
+        svg.appendChild(ring);
+      });
+
+      // Eixos + rótulos
+      DIM_ORDER.forEach(function (dim, i) {
+        var end = pointFor(i, 100);
+        var axis = document.createElementNS(ns, 'line');
+        axis.setAttribute('x1', cx); axis.setAttribute('y1', cy);
+        axis.setAttribute('x2', end[0]); axis.setAttribute('y2', end[1]);
+        axis.setAttribute('stroke', 'rgba(255,255,255,.15)');
+        svg.appendChild(axis);
+
+        var labelPoint = pointFor(i, 122);
+        var label = document.createElementNS(ns, 'text');
+        label.setAttribute('x', labelPoint[0]); label.setAttribute('y', labelPoint[1]);
+        label.setAttribute('text-anchor', 'middle'); label.setAttribute('dominant-baseline', 'middle');
+        label.setAttribute('font-size', '11'); label.setAttribute('font-weight', '800');
+        label.setAttribute('fill', 'var(' + DIM_META[dim].varName + ')');
+        label.textContent = dim;
+        svg.appendChild(label);
+      });
+
+      // Polígono de dados
+      var dataPts = DIM_ORDER.map(function (dim, i) { return pointFor(i, vectors[dim] || 0).join(','); }).join(' ');
+      var poly = document.createElementNS(ns, 'polygon');
+      poly.setAttribute('points', dataPts);
+      poly.setAttribute('fill', 'rgba(255,215,106,.25)');
+      poly.setAttribute('stroke', 'var(--gold)');
+      poly.setAttribute('stroke-width', '2');
+      svg.appendChild(poly);
+
+      DIM_ORDER.forEach(function (dim, i) {
+        var p = pointFor(i, vectors[dim] || 0);
+        var dot = document.createElementNS(ns, 'circle');
+        dot.setAttribute('cx', p[0]); dot.setAttribute('cy', p[1]); dot.setAttribute('r', '3.5');
+        dot.setAttribute('fill', 'var(' + DIM_META[dim].varName + ')');
+        svg.appendChild(dot);
+      });
+    }
+
+    function render(data) {
+      fillGoldTube(parseFormula(data.recommended.formula));
+      document.getElementById('confidence-badge').textContent = data.confidence + '% de semelhança no modelo · não é teste';
+      document.getElementById('result-title').textContent = data.recommended.title;
+      document.getElementById('result-description').textContent = data.recommended.description || '';
+      var params = new URLSearchParams(location.search);
+      var token = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+      var detailParams = new URLSearchParams({ page: 'vocation_detail', token: token, vocation: data.recommended.id || '' });
+      document.getElementById('detail-link').href = '?' + detailParams.toString();
+      document.getElementById('restart-link').href = '?' + new URLSearchParams({ page: 'scenario_list', token: token }).toString();
+
+      var formulaRow = document.getElementById('formula-row');
+      formulaRow.innerHTML = '';
+      parseFormula(data.recommended.formula).forEach(function (part) {
+        var pill = document.createElement('span');
+        pill.className = 'pill';
+        pill.style.background = 'var(' + DIM_META[part.dim].varName + ')';
+        pill.textContent = part.q + '/4 ' + part.dim;
+        formulaRow.appendChild(pill);
+      });
+
+      drawRadar(data.vectors);
+
+      var pct = Math.round((data.scenariosCompleted / Math.max(1, data.scenariosTotal)) * 100);
+      document.getElementById('ring').style.setProperty('--pct', pct);
+      document.getElementById('ring-pct').textContent = pct + '%';
+      document.getElementById('completion-text').textContent =
+        data.scenariosCompleted + ' de ' + data.scenariosTotal + ' dilemas resolvidos.';
+
+      var altList = document.getElementById('alt-list');
+      altList.innerHTML = '';
+      (data.alternatives || []).slice(0, 5).forEach(function (alt, idx) {
+        var item = document.createElement('div');
+        item.className = 'alt-item';
+        var rank = document.createElement('span');
+        rank.className = 'alt-rank';
+        rank.textContent = String.fromCharCode(65 + idx);
+        item.appendChild(rank);
+        var tube = document.createElement('div');
+        tube.className = 'mini-tube';
+        fillMiniTube(tube, parseFormula(alt.formula));
+        item.appendChild(tube);
+        var info = document.createElement('div');
+        info.className = 'alt-info';
+        var title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = alt.title;
+        var compat = document.createElement('div');
+        compat.className = 'compat';
+        compat.textContent = alt.compatibility + '% de semelhança no modelo';
+        info.appendChild(title); info.appendChild(compat);
+        item.appendChild(info);
+        altList.appendChild(item);
+      });
+    }
+
+    function loadResult() {
+      var token = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+      document.getElementById('history-link').href = '?' + new URLSearchParams({ page: 'scenario_history', token: token }).toString();
+      document.getElementById('restart-link').href = '?' + new URLSearchParams({ page: 'scenario_list', token: token }).toString();
+      function showError(message) {
+        document.getElementById('confidence-badge').textContent = 'Resultado indisponível';
+        document.getElementById('result-title').textContent = message;
+        document.getElementById('result-description').textContent = 'Confira suas tentativas no histórico antes de enviar outra poção. Uma falha no resultado geral não significa que a tentativa deixou de ser registrada.';
+        document.getElementById('report-btn').disabled = true;
+      }
+      if (!token) { showError('Sessão ausente. Entre novamente.'); return; }
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (result) { result && result.success && result.data ? render(result.data) : showError((result && result.error) || 'Não foi possível gerar o resultado.'); })
+          .withFailureHandler(function (err) { showError('Erro ao carregar resultado. Tente novamente.'); })
+          .api_getResultDashboard(token);
+      } else {
+        showError('Esta página precisa ser aberta pelo aplicativo publicado.');
+      }
+    }
+
+    document.getElementById('report-btn').addEventListener('click', function (ev) {
+      var btn = ev.currentTarget;
+      var token = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+      btn.disabled = true;
+      btn.textContent = 'Gerando relatório…';
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (result && result.success) btn.textContent = 'Relatório gerado!';
+            else { btn.textContent = 'Gerar relatório completo 📄'; btn.disabled = false; }
+          })
+          .withFailureHandler(function () { btn.textContent = 'Tentar gerar relatório novamente'; btn.disabled = false; })
+          .api_flowGenerateReport(token);
+      } else {
+        btn.textContent = 'Gerar relatório completo 📄'; btn.disabled = false;
+      }
+    });
+
+    loadResult();
+  </script>
+</body>
+</html>

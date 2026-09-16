@@ -1,0 +1,369 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — laboratory.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Interface principal do laboratório — o caldeirão computacional. Exibe o
+ *   cenário ativo e um grande tubo de ensaio que o utilizador enche com
+ *   QUARTOS (0–4) de Filosofia, Psicometria e IA. Os três líquidos têm
+ *   densidades diferentes e não se misturam: FIL (azul) assenta no fundo,
+ *   PSI (laranja) fica no meio, IA (rosa) flutua no topo. A poção só pode
+ *   ser submetida quando a soma é exatamente 4/4.
+ *
+ * NOTA DE ESPECIFICAÇÃO:
+ *   O stub original previa sliders 0–100%; foi adotada a escala 0–4 quartos,
+ *   que é a unidade real da fórmula epistémica do jogo (1/4+1/4+2/4) e
+ *   torna a validação da soma trivial e legível para o adolescente.
+ *
+ * INTEGRAÇÕES (google.script.run — bridges globais api_*):
+ *   • api_getNextScenario(userId) — próximo cenário.
+ *   • api_submitPotion(payload) — submissão { scenarioId, fil, psi, ia, freeText }.
+ *   Enquanto o backend de jogo não existir, a página roda em modo demo com
+ *   cenários locais e reação calculada no cliente.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.1.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Laboratório</title>
+  <?!= HtmlService.createHtmlOutputFromFile('StyleBase').getContent() ?>
+  <style>
+    body { padding: 0; }
+    .lab { max-width: 1000px; margin: 0 auto; padding: 24px; display: grid; gap: 24px;
+           grid-template-columns: 1.2fr .8fr; align-items: start; }
+    @media (max-width: 760px) { .lab { grid-template-columns: 1fr; } }
+
+    /* ── Cenário ─────────────────────────────────────────────────────── */
+    .panel {
+      background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 24px; padding: 26px;
+    }
+    .scenario-tag {
+      display: inline-block; padding: 4px 14px; border-radius: 999px; font-size: .78rem;
+      font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+      background: rgba(139,92,246,.25); color: #cdb8ff; border: 1px solid var(--neu);
+    }
+    #scenario-title { margin: 12px 0 10px; font-size: 1.35rem; line-height: 1.25; }
+    #scenario-text { color: var(--muted); line-height: 1.6; font-size: .97rem; }
+    .free-text { margin-top: 18px; }
+    .free-text label { font-weight: 600; font-size: .88rem; display: block; margin-bottom: 6px; }
+    textarea {
+      width: 100%; min-height: 84px; resize: vertical; padding: 12px 14px;
+      border-radius: 14px; border: 2px solid rgba(255,255,255,.15);
+      background: rgba(0,0,0,.25); color: var(--text); font: inherit; font-size: .92rem;
+      outline: none;
+    }
+    textarea:focus { border-color: var(--neu); }
+
+    /* ── Sliders de quartos ──────────────────────────────────────────── */
+    .mixers { margin-top: 22px; display: grid; gap: 18px; }
+    .mixer { display: grid; grid-template-columns: 92px 1fr 54px; gap: 12px; align-items: center; }
+    .mixer .dim { font-weight: 800; font-size: .95rem; display: flex; align-items: center; gap: 8px; }
+    .mixer .dot { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
+    .mixer .qty { font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+    input[type=range] { width: 100%; accent-color: var(--accent, var(--fil)); height: 26px; cursor: pointer; }
+
+    .sum-row { margin-top: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .sum-badge {
+      font-weight: 800; padding: 8px 18px; border-radius: 999px; font-size: 1rem;
+      background: rgba(255,255,255,.08); border: 2px dashed rgba(255,255,255,.25);
+      transition: all .25s;
+    }
+    .sum-badge.full { border-style: solid; border-color: var(--ok); color: var(--ok);
+                      box-shadow: 0 0 18px rgba(45,212,160,.35); }
+    .btn {
+      padding: 13px 28px; border: 0; border-radius: 999px; font-size: 1rem; font-weight: 800;
+      color: #fff; cursor: pointer; background: linear-gradient(90deg, var(--ia), #c13cff);
+      box-shadow: 0 6px 22px rgba(255,77,141,.4); transition: transform .15s, opacity .2s;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-2px) scale(1.03); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-next { background: linear-gradient(90deg, var(--fil), var(--bio));
+                box-shadow: 0 6px 22px rgba(76,201,240,.35); display: none; }
+
+    /* ── Tubo gigante ────────────────────────────────────────────────── */
+    .tube-panel { text-align: center; position: sticky; top: 24px; }
+    .big-tube {
+      position: relative; width: 120px; height: 340px; margin: 10px auto 0;
+      border: 4px solid rgba(255,255,255,.4); border-top-width: 0;
+      border-radius: 0 0 60px 60px; background: rgba(255,255,255,.04);
+      display: flex; flex-direction: column-reverse; overflow: hidden;
+      box-shadow: inset 0 0 26px rgba(255,255,255,.08), 0 16px 40px rgba(0,0,0,.5);
+    }
+    .big-tube::before {
+      content: ""; position: absolute; top: 0; left: -12px; right: -12px; height: 14px;
+      border: 4px solid rgba(255,255,255,.4); border-radius: 10px; z-index: 3;
+      background: rgba(255,255,255,.05);
+    }
+    .big-tube::after {
+      content: ""; position: absolute; top: 6%; left: 12%; width: 18px; height: 84%;
+      background: linear-gradient(rgba(255,255,255,.45), transparent); border-radius: 10px;
+      z-index: 3; pointer-events: none;
+    }
+    .big-tube .layer { width: 100%; height: 0; position: relative;
+      transition: height .55s cubic-bezier(.34,1.56,.64,1); }
+    .big-tube .surface {
+      position: absolute; top: -4px; left: 0; right: 0; height: 8px;
+      background: rgba(255,255,255,.3); border-radius: 50%; filter: blur(1.5px);
+    }
+    /* Densidades: FIL no fundo, PSI no meio, IA no topo */
+    #big-fil { background: linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.14)), var(--fil); }
+    #big-psi { background: linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.14)), var(--psi); }
+    #big-ia  { background: linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.14)), var(--ia); }
+    .bubble { position: absolute; bottom: -12px; border-radius: 50%;
+      background: rgba(255,255,255,.55); animation: rise 3.2s linear infinite; }
+    @keyframes rise {
+      0% { transform: translateY(0) scale(.6); opacity: 0; }
+      15% { opacity: .9; }
+      100% { transform: translateY(-300px) scale(1.2); opacity: 0; }
+    }
+    .big-tube.reacting { animation: shake .5s ease-in-out 2; }
+    @keyframes shake {
+      0%,100% { transform: rotate(0); } 25% { transform: rotate(-2.5deg); } 75% { transform: rotate(2.5deg); }
+    }
+    #reaction {
+      margin-top: 16px; min-height: 60px; font-size: .95rem; color: var(--muted);
+      line-height: 1.5; padding: 0 8px;
+    }
+    #reaction .big { font-size: 1.8rem; display: block; margin-bottom: 4px; }
+    h2.tube-title { font-size: 1.05rem; letter-spacing: .5px; }
+  </style>
+</head>
+<body>
+  <?!= HtmlService.createHtmlOutputFromFile('header').getContent() ?>
+  <nav class="lab-nav" aria-label="Navegação do laboratório">
+    <a href="<?!= getScriptUrl() ?>?page=welcome&amp;token=<?!= encodeURIComponent(session && session.sessionId ? session.sessionId : '') ?>" target="_top">← Início</a>
+    <a href="<?!= getScriptUrl() ?>?page=scenario_list&amp;token=<?!= encodeURIComponent(session && session.sessionId ? session.sessionId : '') ?>" target="_top">Dilemas</a>
+    <a href="<?!= getScriptUrl() ?>?page=scenario_history&amp;token=<?!= encodeURIComponent(session && session.sessionId ? session.sessionId : '') ?>" target="_top">Histórico</a>
+  </nav>
+  <style>
+    .lab-nav{width:min(1180px,calc(100% - 28px));margin:14px auto 0;display:flex;gap:8px;overflow-x:auto;}
+    .lab-nav a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border:1px solid rgba(255,255,255,.2);border-radius:8px;color:var(--text);text-decoration:none;white-space:nowrap;background:rgba(0,0,0,.2);}
+    .lab-nav a:focus-visible{outline:3px solid #fde68a;outline-offset:2px;}
+  </style>
+  <div class="lab">
+    <?!= include('GameScene'); ?>
+    <!-- Cenário + misturadores -->
+    <section class="panel">
+      <span class="scenario-tag" id="scenario-category">carregando…</span>
+      <h1 id="scenario-title">Preparando a bancada…</h1>
+      <p id="scenario-text"></p>
+
+      <div class="free-text">
+        <label for="free-text">Justifique sua mistura: qual evidência, dúvida ou cuidado guiou sua escolha? (opcional)</label>
+        <textarea id="free-text" maxlength="800"
+          placeholder="Explique sua hipótese e o que você ainda precisaria investigar."></textarea>
+        <p class="muted" style="margin-top:8px;font-size:.82rem">A mistura mostra caminhos de investigação para este cenário; não define profissão, perfil ou diagnóstico.</p>
+      </div>
+
+      <div class="mixers">
+        <div class="mixer" style="--accent: var(--fil)">
+          <span class="dim"><span class="dot" style="background:var(--fil);color:var(--fil)"></span>FIL</span>
+          <input type="range" id="range-fil" min="0" max="4" step="1" value="0" aria-label="Quartos de Filosofia">
+          <span class="qty" id="qty-fil">0/4</span>
+        </div>
+        <div class="mixer" style="--accent: var(--psi)">
+          <span class="dim"><span class="dot" style="background:var(--psi);color:var(--psi)"></span>PSI</span>
+          <input type="range" id="range-psi" min="0" max="4" step="1" value="0" aria-label="Quartos de Psicometria">
+          <span class="qty" id="qty-psi">0/4</span>
+        </div>
+        <div class="mixer" style="--accent: var(--ia)">
+          <span class="dim"><span class="dot" style="background:var(--ia);color:var(--ia)"></span>IA</span>
+          <input type="range" id="range-ia" min="0" max="4" step="1" value="0" aria-label="Quartos de IA">
+          <span class="qty" id="qty-ia">0/4</span>
+        </div>
+      </div>
+
+      <div class="sum-row">
+        <span class="sum-badge" id="sum-badge">Poção: 0/4</span>
+        <div>
+          <button class="btn" id="submit-btn" disabled>Misturar! ⚗️</button>
+          <button class="btn btn-next" id="next-btn">Próximo dilema →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tubo gigante -->
+    <aside class="panel tube-panel">
+      <h2 class="tube-title">Seu tubo de ensaio</h2>
+      <div class="big-tube" id="big-tube">
+        <div class="layer" id="big-fil"></div>
+        <div class="layer" id="big-psi"><div class="surface"></div></div>
+        <div class="layer" id="big-ia"><div class="surface"></div></div>
+      </div>
+      <div id="reaction" role="status" aria-live="polite"><span class="big">🫧</span>Arraste as barras: cada quarto vira uma camada de cor. Líquidos de densidades diferentes não se misturam!</div>
+    </aside>
+  </div>
+
+  <script>
+    // Cenários de demonstração usados quando o backend ainda não responde.
+    var DEMO_SCENARIOS = [
+      { id: 'demo-1', category: 'Bioética',
+        title: 'A IA médica errou o diagnóstico. E agora?',
+        text: 'Um hospital usou uma IA para diagnosticar pacientes. Ela errou, e alguém saiu prejudicado. Os médicos confiaram cegamente na máquina. Como você distribuiria os 4 quartos da sua poção para investigar esse problema?' },
+      { id: 'demo-2', category: 'Arte digital',
+        title: 'O quadro premiado foi feito por um algoritmo',
+        text: 'Uma obra gerada por IA venceu um concurso de arte. Artistas humanos protestaram. Quem é o autor? A obra vale menos? Prepare uma poção para analisar o caso.' },
+      { id: 'demo-3', category: 'Redes sociais',
+        title: 'O feed que deixa todo mundo bravo',
+        text: 'Uma rede social descobre que posts que causam raiva geram mais engajamento — e o algoritmo aprendeu isso sozinho. Que mistura de saberes você usaria para redesenhar esse sistema?' }
+    ];
+
+    var state = { scenario: null, scenarios: [], scenarioIndex: -1, demoIndex: 0, locked: false };
+    // O iframe do HtmlService não preserva de forma confiável a query string
+    // do /exec. Use a sessão que o servidor já validou em doGet().
+    var pageToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var ranges = { fil: byId('range-fil'), psi: byId('range-psi'), ia: byId('range-ia') };
+
+    function byId(id) { return document.getElementById(id); }
+    function total() {
+      return Number(ranges.fil.value) + Number(ranges.psi.value) + Number(ranges.ia.value);
+    }
+
+    function makeBubbles(layerEl, quarters) {
+      layerEl.querySelectorAll('.bubble').forEach(function (b) { b.remove(); });
+      for (var i = 0; i < quarters * 2; i++) {
+        var bubble = document.createElement('span');
+        bubble.className = 'bubble';
+        var size = 5 + Math.random() * 8;
+        bubble.style.width = size + 'px';
+        bubble.style.height = size + 'px';
+        bubble.style.left = (10 + Math.random() * 68) + '%';
+        bubble.style.animationDelay = (Math.random() * 3) + 's';
+        layerEl.appendChild(bubble);
+      }
+    }
+
+    function updateTube() {
+      var q = { fil: Number(ranges.fil.value), psi: Number(ranges.psi.value), ia: Number(ranges.ia.value) };
+      var sum = q.fil + q.psi + q.ia;
+
+      // Se o aluno tentar passar de 4/4, o slider mexido "devolve" o excesso.
+      ['fil', 'psi', 'ia'].forEach(function (dim) {
+        byId('qty-' + dim).textContent = q[dim] + '/4';
+        // 4/4 ≈ 88% da altura do tubo (sobra o "ar" no topo)
+        byId('big-' + dim).style.height = (q[dim] * 22) + '%';
+        makeBubbles(byId('big-' + dim), q[dim]);
+      });
+
+      var badge = byId('sum-badge');
+      badge.textContent = 'Poção: ' + sum + '/4' + (sum === 4 ? ' ✅' : '');
+      badge.classList.toggle('full', sum === 4);
+      byId('submit-btn').disabled = sum !== 4 || state.locked;
+    }
+
+    function onRangeInput(ev) {
+      var sum = total();
+      if (sum > 4) {
+        // Reduz o próprio slider mexido até a soma voltar a 4.
+        ev.target.value = Number(ev.target.value) - (sum - 4);
+      }
+      updateTube();
+    }
+    Object.keys(ranges).forEach(function (k) { ranges[k].addEventListener('input', onRangeInput); });
+
+    function showScenario(s) {
+      state.scenario = s;
+      byId('scenario-category').textContent = s.category || 'Dilema';
+      byId('scenario-title').textContent = s.title;
+      byId('scenario-text').textContent = s.text || s.description || '';
+      byId('free-text').value = '';
+      ranges.fil.value = 0; ranges.psi.value = 0; ranges.ia.value = 0;
+      state.locked = false;
+      byId('next-btn').style.display = 'none';
+      byId('submit-btn').style.display = '';
+      byId('reaction').innerHTML = '<span class="big">🫧</span>Arraste as barras: cada quarto vira uma camada de cor.';
+      updateTube();
+    }
+
+    function loadScenario() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (result) {
+            var scenarios = result && result.success && result.data && result.data.scenarios;
+            if (Array.isArray(scenarios) && scenarios.length) {
+              state.scenarios = scenarios;
+              state.scenarioIndex = (state.scenarioIndex + 1) % scenarios.length;
+              showScenario(scenarios[state.scenarioIndex]);
+            }
+            else showDemoScenario();
+          })
+          .withFailureHandler(showDemoScenario)
+          .api_flowGetScenarios(pageToken);
+      } else {
+        showDemoScenario();
+      }
+    }
+
+    function showDemoScenario() {
+      showScenario(DEMO_SCENARIOS[state.demoIndex % DEMO_SCENARIOS.length]);
+      state.demoIndex++;
+    }
+
+    function localReaction(q) {
+      // Reação demonstrativa no cliente (o veredicto real virá do ScoreService).
+      var dominant = q.ia >= q.fil && q.ia >= q.psi ? 'IA' : (q.fil >= q.psi ? 'FIL' : 'PSI');
+      var lines = {
+        IA: ['🤖', 'Sua poção borbulha em rosa! Você atacou o problema pela arquitetura dos algoritmos.'],
+        FIL: ['🦉', 'Um brilho azul profundo… Você foi pela raiz ética e conceitual do dilema.'],
+        PSI: ['📊', 'Faíscas laranjas! Você quis medir o comportamento antes de julgar.']
+      };
+      var balanced = q.fil > 0 && q.psi > 0 && q.ia > 0;
+      var extra = balanced ? ' As três camadas juntas deixaram a mistura estável — combinação de alquimista experiente! ✨' : '';
+      return '<span class="big">' + lines[dominant][0] + '</span>' + lines[dominant][1] + extra;
+    }
+
+    function afterSubmit(html) {
+      var tube = byId('big-tube');
+      tube.classList.add('reacting');
+      setTimeout(function () { tube.classList.remove('reacting'); }, 1100);
+      byId('reaction').innerHTML = html;
+      byId('submit-btn').style.display = 'none';
+      var next = byId('next-btn');
+      next.style.display = '';
+    }
+
+    byId('submit-btn').addEventListener('click', function () {
+      if (state.locked) return;
+      state.locked = true;
+      updateTube();
+      var payload = {
+        scenarioId: state.scenario && state.scenario.id,
+        fil: Number(ranges.fil.value),
+        psi: Number(ranges.psi.value),
+        ia: Number(ranges.ia.value),
+        freeText: byId('free-text').value.trim()
+      };
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (result && result.success && result.data && result.data.feedback) {
+              afterSubmit('<span class="big">✨</span>' + result.data.feedback);
+            } else {
+              afterSubmit(localReaction(payload));
+            }
+          })
+          .withFailureHandler(function () { afterSubmit(localReaction(payload)); })
+          .api_flowSubmitPotion(pageToken, payload.scenarioId, payload);
+      } else {
+        setTimeout(function () { afterSubmit(localReaction(payload)); }, 500);
+      }
+    });
+
+    byId('next-btn').addEventListener('click', loadScenario);
+
+    loadScenario();
+  </script>
+  <?!= HtmlService.createHtmlOutputFromFile('footer').getContent() ?>
+</body>
+</html>

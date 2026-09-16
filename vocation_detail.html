@@ -1,0 +1,448 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — vocation_detail.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Detalhe de uma carreira vocacional: tubo grande com a fórmula epistémica
+ *   em camadas, descrição, competências como chips e vocações relacionadas
+ *   do mesmo domínio (mini estante). O contexto de mercado é apresentado em
+ *   termos de TENDÊNCIAS gerais do mercado de trabalho, sem datas ou fatos
+ *   geopolíticos específicos — mantém o conteúdo evergreen.
+ *
+ * INTEGRAÇÕES (google.script.run — bridge global api_*):
+ *   • api_getVocationDetail(id) — { vocation, related: [...] }. O id vem de
+ *     location.search (?page=vocation_detail&id=<vocation-id>), lido no cliente.
+ *   Degrada para o catálogo demo local quando google.script.run ou o id não
+ *   são encontrados.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Qualquer texto vindo do servidor é inserido via textContent (nunca innerHTML).
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.1.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Detalhe da Vocação</title>
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.06);
+      --text: #f3eeff; --muted: #b7a8e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1100px 650px at 85% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 24px 20px 48px;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    .back { color: var(--muted); text-decoration: none; font-size: .88rem; display: inline-block; margin-bottom: 16px; }
+    .back:hover { color: var(--fil); }
+
+    .hero { display: grid; gap: 26px; grid-template-columns: auto 1fr; align-items: center;
+      background: var(--card); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; padding: 28px; }
+    @media (max-width: 640px) { .hero { grid-template-columns: 1fr; text-align: center; justify-items: center; } }
+
+    .big-tube {
+      position: relative; width: 90px; height: 250px;
+      border: 3.5px solid rgba(255,255,255,.38); border-top-width: 0;
+      border-radius: 0 0 45px 45px; background: rgba(255,255,255,.04);
+      display: flex; flex-direction: column-reverse; overflow: hidden;
+      box-shadow: inset 0 0 20px rgba(255,255,255,.08), 0 12px 32px rgba(0,0,0,.45);
+    }
+    .big-tube::before { content:""; position:absolute; top:0; left:-9px; right:-9px; height:11px;
+      border:3.5px solid rgba(255,255,255,.38); border-radius:8px; z-index:3; }
+    .big-tube::after { content:""; position:absolute; top:7%; left:13%; width:13px; height:80%;
+      background: linear-gradient(rgba(255,255,255,.5), transparent); border-radius:8px; z-index:3; }
+    .big-tube .layer { width: 100%; position: relative; }
+    .big-tube .surface { position: absolute; top: -3px; left: 0; right: 0; height: 6px;
+      background: rgba(255,255,255,.28); border-radius: 50%; filter: blur(1px); }
+
+    .voc-domain-tag { display: inline-block; padding: 4px 14px; border-radius: 999px; font-size: .78rem;
+      font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+      background: rgba(139,92,246,.25); color: #cdb8ff; border: 1px solid var(--neu); margin-bottom: 10px; }
+    .hero h1 { font-size: clamp(1.3rem, 3.2vw, 1.9rem); line-height: 1.25; }
+    .formula-row { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    @media (max-width: 640px) { .formula-row { justify-content: center; } }
+    .pill { padding: 4px 12px; border-radius: 999px; color: #1a1033; font-weight: 800; font-size: .84rem; }
+
+    .section { background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 22px; padding: 24px; margin-top: 20px; }
+    .section h2 { font-size: 1.05rem; margin-bottom: 12px; }
+    .section p { color: var(--muted); line-height: 1.6; font-size: .94rem; }
+
+    .skills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .skill-chip { padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15); font-size: .85rem; font-weight: 600; }
+
+    .trend-box { display: flex; gap: 12px; align-items: flex-start; }
+    .trend-box .emoji { font-size: 1.6rem; }
+
+    .related-shelf { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 4px; }
+    .related-card { display: flex; gap: 10px; padding: 12px; border-radius: 16px;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+      cursor: pointer; transition: transform .15s; text-decoration: none; color: var(--text); }
+    .related-card:hover { transform: translateY(-3px); }
+    .mini-tube { flex: 0 0 30px; height: 80px; position: relative;
+      border: 2px solid rgba(255,255,255,.35); border-top-width: 0; border-radius: 0 0 15px 15px;
+      background: rgba(255,255,255,.04); display: flex; flex-direction: column-reverse; overflow: hidden; }
+    .mini-tube .layer { width: 100%; }
+    .related-card .title { font-size: .82rem; font-weight: 700; line-height: 1.3; align-self: center; }
+
+    .actions { margin-top: 22px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn { padding: 12px 24px; border: 0; border-radius: 999px; font-weight: 800; font-size: .92rem;
+      color: #fff; cursor: pointer; background: linear-gradient(90deg, var(--ia), #c13cff);
+      box-shadow: 0 6px 20px rgba(255,77,141,.4); transition: transform .15s; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-ghost { background: transparent; color: var(--fil); border: 2px solid var(--fil); box-shadow: none; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="?page=vocation_list" target="_top">← Voltar ao catálogo</a>
+
+    <section class="hero">
+      <div class="big-tube" id="big-tube"></div>
+      <div>
+        <span class="voc-domain-tag" id="domain-tag">Domínio</span>
+        <h1 id="voc-title">Carregando…</h1>
+        <div class="formula-row" id="formula-row"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Sobre esta ciência</h2>
+      <p id="voc-description"></p>
+    </section>
+
+    <section class="section">
+      <h2>Competências essenciais</h2>
+      <div class="skills" id="skills"></div>
+    </section>
+
+    <section class="section trend-box">
+      <span class="emoji">📈</span>
+      <div>
+        <h2>Por que isso importa</h2>
+        <p id="trend-text"></p>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Vocações do mesmo domínio</h2>
+      <div class="related-shelf" id="related-shelf"></div>
+    </section>
+
+    <div class="actions">
+      <button class="btn" id="share-btn">Compartilhar vocação 🔗</button>
+      <a class="btn btn-ghost" href="?page=vocation_list" target="_top">Explorar outras ciências</a>
+    </div>
+  </div>
+
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var DIMENSIONS = {
+      IA:  { name: 'Inteligência Artificial', varName: '--ia'  },
+      FIL: { name: 'Filosofia',               varName: '--fil' },
+      PSI: { name: 'Psicometria',             varName: '--psi' },
+      NEU: { name: 'Neurociência',            varName: '--neu' },
+      BIO: { name: 'Biologia',                varName: '--bio' },
+      FIS: { name: 'Física',                  varName: '--fis' },
+      SOC: { name: 'Sociologia',              varName: '--soc' },
+      ART: { name: 'Artes',                   varName: '--art' }
+    };
+
+    // Blurbs genéricos de tendência por domínio — sem datas ou fatos
+    // geopolíticos específicos, para manter o conteúdo sempre atual.
+    var DOMAIN_TRENDS = {
+      A: 'Empresas de tecnologia buscam cada vez mais profissionais capazes de auditar e explicar o comportamento de sistemas de IA — uma ponte entre humanos e máquinas que só cresce em demanda.',
+      B: 'A biotecnologia orientada por dados está redesenhando a medicina e a agricultura, criando espaço para quem entende tanto de biologia quanto de modelos preditivos.',
+      C: 'À medida que algoritmos moldam decisões públicas e privadas, cresce a necessidade de especialistas que entendam o impacto social e ético dessas tecnologias.',
+      D: 'A criação assistida por IA está transformando indústrias criativas — de jogos a design —, valorizando quem sabe unir sensibilidade artística e ferramentas computacionais.',
+      E: 'Avanços em física e computação de ponta continuam abrindo fronteiras de pesquisa, com demanda constante por quem transita entre ciência fundamental e engenharia aplicada.',
+      F: 'A saúde digital de precisão cresce junto com a necessidade de profissionais que combinem cuidado humano com ferramentas preditivas de diagnóstico e bem-estar.'
+    };
+
+    var DEMO_VOCATIONS = [
+      { VocationID: 'A01', Domain: 'A', Formula: 'IA:2,FIL:1,PSI:1',
+        Title: 'Psicologia Fenomenológica Existencial Mediada por IA',
+        Description: 'Decodifica a experiência subjetiva humana com biossensores de IA e lentes fenomenológicas, unindo introspecção filosófica e métricas comportamentais.',
+        Skills: ['Fenomenologia', 'Machine Learning', 'Biosensoriamento', 'Psicometria de Campo'] },
+      { VocationID: 'A03', Domain: 'A', Formula: 'IA:2,PSI:2',
+        Title: 'Psicometria Sintética de Agentes Autônomos (LLMs)',
+        Description: 'Avalia e calibra traços de "personalidade" de modelos de linguagem para garantir segurança comportamental em sistemas de IA conversacional.',
+        Skills: ['Teoria de Resposta ao Item', 'Engenharia de Prompts', 'Modelos Latentes'] },
+      { VocationID: 'B01', Domain: 'B', Formula: 'BIO:2,FIS:1,IA:1',
+        Title: 'Bioinformática Quântica Aplicada',
+        Description: 'Simulação quântica do dobramento de proteínas e reações bioquímicas complexas em alta velocidade.',
+        Skills: ['Computação Quântica', 'Genômica Computacional', 'Física Molecular'] },
+      { VocationID: 'B06', Domain: 'B', Formula: 'BIO:2,IA:2',
+        Title: 'Evolução Dirigida Digitalmente por Aprendizado Profundo',
+        Description: 'Acelera mutações benéficas de enzimas industriais usando modelos generativos para guiar a seleção in vitro.',
+        Skills: ['Modelagem de Proteínas', 'Genética Molecular', 'Otimização de Enzimas'] },
+      { VocationID: 'C08', Domain: 'C', Formula: 'PSI:2,IA:2',
+        Title: 'Psicometria das Emoções Coletivas em Ambientes Digitais',
+        Description: 'Analisa em tempo real o clima emocional de populações urbanas para prevenção de crises de saúde mental coletivas.',
+        Skills: ['Análise de Sentimentos', 'Processamento de Sinais Sociais', 'Psicometria de Emergência'] },
+      { VocationID: 'C02', Domain: 'C', Formula: 'SOC:2,IA:1,FIL:1',
+        Title: 'Socio-criminologia Algorítmica de Precisão',
+        Description: 'Avalia criticamente vieses geográficos e raciais em modelos preditivos usados em segurança pública.',
+        Skills: ['Criminologia Crítica', 'Sociologia de Dados', 'Justiça Algorítmica'] },
+      { VocationID: 'D01', Domain: 'D', Formula: 'ART:2,NEU:1,IA:1',
+        Title: 'Design de Experiência Estética Neuro-Direcionada',
+        Description: 'Cria obras digitais e ambientes virtuais que reagem às ondas cerebrais do espectador captadas por biossensores.',
+        Skills: ['Arte Generativa', 'Programação de Gráficos', 'Neuro-estética'] },
+      { VocationID: 'D10', Domain: 'D', Formula: 'FIL:2,ART:2',
+        Title: 'Estética do Erro de Máquina (Glitch Art Epistêmica)',
+        Description: 'Usa falhas e alucinações de IAs generativas como formas legítimas de crítica à objetividade algorítmica.',
+        Skills: ['Crítica de Arte Contemporânea', 'Estética do Erro', 'Filosofia da Técnica'] },
+      { VocationID: 'E04', Domain: 'E', Formula: 'FIS:2,IA:2',
+        Title: 'Cosmologia Computacional e Mineração de Dados Astrofísicos',
+        Description: 'Explora grandes catálogos de telescópios usando IA generativa para decodificar padrões cósmicos.',
+        Skills: ['Astrofísica', 'Cosmologia Observacional', 'Estatística Bayesiana'] },
+      { VocationID: 'E01', Domain: 'E', Formula: 'FIS:2,NEU:1,IA:1',
+        Title: 'Computação Cognitiva Neuromórfica',
+        Description: 'Desenha microchips com memristores que imitam os canais iônicos de neurônios biológicos.',
+        Skills: ['Física do Estado Sólido', 'Neurobiologia Teórica', 'Silício Analógico'] },
+      { VocationID: 'F03', Domain: 'F', Formula: 'PSI:2,ART:1,IA:1',
+        Title: 'Avaliação Cognitiva Baseada em Jogos Sérios Inteligentes',
+        Description: 'Desenvolve jogos adaptativos que traçam diagnósticos psicométricos de forma lúdica e invisível.',
+        Skills: ['Psicometria Educacional', 'UX de Jogos Sérios', 'IA Adaptativa'] },
+      { VocationID: 'F08', Domain: 'F', Formula: 'ART:2,PSI:1,NEU:1',
+        Title: 'Design Psicoacústico de Silêncio e Redução de Ansiedade',
+        Description: 'Cria ambientes sonoros dinâmicos voltados para acalmar a hiperestimulação sensorial.',
+        Skills: ['Design de Ambientes Sensoriais', 'Psicoacústica Clínica', 'Neurofisiologia Sensorial'] }
+    ];
+
+    function parseFormula(formula) {
+      return String(formula || '').split(',').map(function (part) {
+        var bits = part.split(':');
+        return { dim: bits[0].trim().toUpperCase(), q: parseInt(bits[1], 10) || 0 };
+      }).filter(function (p) { return DIMENSIONS[p.dim] && p.q > 0; });
+    }
+
+    function fillTube(tubeEl, parts, big) {
+      tubeEl.innerHTML = '';
+      parts.forEach(function (part, i) {
+        var layer = document.createElement('div');
+        layer.className = 'layer';
+        layer.style.height = (part.q * 22) + '%';
+        layer.style.background = 'linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), var(' + DIMENSIONS[part.dim].varName + ')';
+        layer.title = part.q + '/4 ' + DIMENSIONS[part.dim].name;
+        if (big && i > 0) {
+          var surface = document.createElement('div');
+          surface.className = 'surface';
+          layer.appendChild(surface);
+        }
+        tubeEl.appendChild(layer);
+      });
+    }
+
+    function renderRelated(current, all) {
+      var shelf = document.getElementById('related-shelf');
+      shelf.innerHTML = '';
+      var related = all.filter(function (v) { return v.Domain === current.Domain && v.VocationID !== current.VocationID; }).slice(0, 4);
+      if (!related.length) {
+        shelf.innerHTML = '<p style="color:var(--muted); font-size:.88rem;">Nenhuma outra vocação demo neste domínio ainda.</p>';
+        return;
+      }
+      related.forEach(function (voc) {
+        var a = document.createElement('a');
+        a.className = 'related-card';
+        a.href = '?page=vocation_detail&id=' + encodeURIComponent(voc.VocationID);
+        a.target = '_top';
+        var tube = document.createElement('div');
+        tube.className = 'mini-tube';
+        fillTube(tube, parseFormula(voc.Formula), false);
+        a.appendChild(tube);
+        var title = document.createElement('span');
+        title.className = 'title';
+        title.textContent = voc.Title;
+        a.appendChild(title);
+        shelf.appendChild(a);
+      });
+    }
+
+    function render(voc, all) {
+      var parts = parseFormula(voc.Formula);
+      fillTube(document.getElementById('big-tube'), parts, true);
+      document.getElementById('domain-tag').textContent = 'Domínio ' + voc.Domain;
+      document.getElementById('voc-title').textContent = voc.Title;
+      document.getElementById('voc-description').textContent = voc.Description || '';
+      document.getElementById('trend-text').textContent = DOMAIN_TRENDS[voc.Domain] || 'Uma área em expansão constante no mercado de trabalho.';
+
+      var formulaRow = document.getElementById('formula-row');
+      formulaRow.innerHTML = '';
+      parts.forEach(function (part) {
+        var pill = document.createElement('span');
+        pill.className = 'pill';
+        pill.style.background = 'var(' + DIMENSIONS[part.dim].varName + ')';
+        pill.textContent = part.q + '/4 ' + part.dim;
+        formulaRow.appendChild(pill);
+      });
+
+      var skills = document.getElementById('skills');
+      skills.innerHTML = '';
+      (voc.Skills || []).forEach(function (skill) {
+        var chip = document.createElement('span');
+        chip.className = 'skill-chip';
+        chip.textContent = skill;
+        skills.appendChild(chip);
+      });
+
+      renderRelated(voc, all);
+      document.title = 'Alquimia do Saber — ' + voc.Title;
+    }
+
+    function getRequestedId() {
+      try {
+        var topParams = new URLSearchParams(window.top.location.search);
+        var localParams = new URLSearchParams(window.location.search);
+        return topParams.get('id') || topParams.get('vocation') || localParams.get('id') || localParams.get('vocation');
+      } catch (err) {
+        var params = new URLSearchParams(window.location.search);
+        return params.get('id') || params.get('vocation');
+      }
+    }
+
+    function loadDetail() {
+      var id = getRequestedId();
+      if (typeof google !== 'undefined' && google.script && google.script.run && id) {
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (result && result.success && result.data && result.data.vocation) {
+              render(result.data.vocation, result.data.related || DEMO_VOCATIONS);
+            } else {
+              renderDemo(id);
+            }
+          })
+          .withFailureHandler(function () { renderDemo(id); })
+          .api_getVocationDetail(authToken, id);
+      } else {
+        renderDemo(id);
+      }
+    }
+
+    function renderDemo(id) {
+      var voc = DEMO_VOCATIONS.filter(function (v) { return v.VocationID === id; })[0] || DEMO_VOCATIONS[0];
+      render(voc, DEMO_VOCATIONS);
+    }
+
+    document.getElementById('share-btn').addEventListener('click', function () {
+      var url = window.top.location.href;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          alert('Link copiado! 🔗');
+        }).catch(function () {
+          prompt('Copie o link da vocação:', url);
+        });
+      } else {
+        prompt('Copie o link da vocação:', url);
+      }
+    });
+
+    loadDetail();
+  </script>
+</body>
+</html>

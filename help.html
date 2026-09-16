@@ -1,0 +1,211 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — help.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Página de ajuda e FAQ. Perguntas frequentes, instruções de uso, glossário de termos e links de suporte.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Lista de perguntas frequentes (accordion).
+   • Glossário de termos (FIL, PSI, IA, Ouro Alquímico).
+   • Instruções de uso do simulador.
+   • Links de suporte (e-mail, WhatsApp).
+   • Tutorial em vídeo (embed).
+   • Versão da aplicação.
+   • Contato da instituição.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • ConfigService.getSetting('SUPPORT_EMAIL') — e-mail de suporte.
+   • ConfigService.getSetting('APP_VERSION') — versão.
+   • ConfigService.getSetting('INSTITUTIONAL_LINKS') — links.
+ * * Accordion FAQ — perguntas expansíveis.
+   Glossary — definições de termos especializados.
+   Contact info — informações de contato da instituição.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Ajuda & FAQ</title>
+  <style>
+    :root{--ia:#ff4d8d;--fil:#4cc9f0;--psi:#ff9e2c;--neu:#8b5cf6;--bio:#2dd4a0;--fis:#ffd23f;--bg1:#160f2e;--bg2:#2a1a52;--card:rgba(255,255,255,.06);--text:#f3eeff;--muted:#b7a8e0;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:"Segoe UI",system-ui,sans-serif;background:radial-gradient(1200px 700px at 50% -10%,var(--bg2),var(--bg1) 70%);color:var(--text);min-height:100vh;padding:28px 20px 60px;}
+    header{max-width:900px;margin:0 auto 32px;text-align:center;}
+    header h1{font-size:clamp(1.8rem,4vw,2.4rem);margin-bottom:12px;}
+    header p{color:var(--muted);font-size:1.05rem;}
+    .container{max-width:900px;margin:0 auto;}
+    .section{background:var(--card);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:28px;margin-bottom:24px;}
+    .section-title{font-size:1.3rem;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+    .faq-list{list-style:none;}
+    .faq-item{margin-bottom:16px;border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;}
+    .faq-question{padding:16px 20px;background:rgba(255,255,255,.03);cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600;transition:background .2s;}
+    .faq-question:hover{background:rgba(255,255,255,.06);}
+    .faq-question .icon{transition:transform .3s;font-size:1.2rem;}
+    .faq-item.open .icon{transform:rotate(180deg);}
+    .faq-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;padding:0 20px;background:rgba(0,0,0,.2);color:var(--muted);line-height:1.7;}
+    .faq-item.open .faq-answer{max-height:500px;padding:16px 20px;}
+    .glossary{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;}
+    .glossary-item{padding:16px;background:rgba(255,255,255,.03);border-radius:12px;border-left:3px solid var(--ia);}
+    .glossary-term{font-weight:700;font-size:1.05rem;margin-bottom:6px;color:var(--ia);}
+    .glossary-def{color:var(--muted);font-size:.9rem;line-height:1.5;}
+    .contact-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;}
+    .contact-card{padding:20px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:12px;text-align:center;}
+    .contact-card .icon{font-size:2.5rem;margin-bottom:12px;}
+    .contact-card h3{margin-bottom:8px;font-size:1.05rem;}
+    .contact-card a{color:var(--fil);text-decoration:none;font-weight:600;}
+    .contact-card a:hover{text-decoration:underline;}
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>❓ Central de Ajuda</h1>
+    <p>Tudo o que você precisa saber sobre a Alquimia do Saber</p>
+  </header>
+  <div class="container">
+    <div class="section">
+      <div class="section-title">💬 Perguntas Frequentes</div>
+      <ul class="faq-list">
+        <li class="faq-item"><div class="faq-question" onclick="toggleFaq(this)"><span>O que é a Alquimia do Saber?</span><span class="icon">▼</span></div><div class="faq-answer">É um laboratório de perguntas. Você combina áreas do conhecimento, explica sua escolha e descobre outras maneiras de investigar um problema.</div></li>
+        <li class="faq-item"><div class="faq-question" onclick="toggleFaq(this)"><span>O que são as áreas do saber?</span><span class="icon">▼</span></div><div class="faq-answer">São 8 jeitos de olhar uma pergunta: Inteligência Artificial, Filosofia, estudo da mente e das emoções, Neurociência, Biologia, Física, Sociologia e Artes. As frações mostram quanto de cada área você quis usar naquela tentativa.</div></li>
+        <li class="faq-item"><div class="faq-question" onclick="toggleFaq(this)"><span>O que é o mapa de interesses?</span><span class="icon">▼</span></div><div class="faq-answer">É um resumo das áreas escolhidas nas atividades. Não é diagnóstico, teste de personalidade, medida de inteligência nem indicação de profissão.</div></li>
+        <li class="faq-item"><div class="faq-question" onclick="toggleFaq(this)"><span>Como funcionam XP e conquistas?</span><span class="icon">▼</span></div><div class="faq-answer">XP e conquistas marcam atividades concluídas. Eles não são nota e não dizem quem é melhor.</div></li>
+        <li class="faq-item"><div class="faq-question" onclick="toggleFaq(this)"><span>Posso refazer os cenários?</span><span class="icon">▼</span></div><div class="faq-answer">Sim. Refazer, mudar a mistura e explicar o novo motivo é uma das partes mais importantes da aprendizagem.</div></li>
+      </ul>
+    </div>
+    <div class="section">
+      <div class="section-title">📖 Glossário de Termos</div>
+      <div class="glossary">
+        <div class="glossary-item"><div class="glossary-term">FIL (Filosofia)</div><div class="glossary-def">Pensamento crítico, ética, lógica e fundamentos conceituais.</div></div>
+        <div class="glossary-item"><div class="glossary-term">PSI (Psicometria)</div><div class="glossary-def">Medição de comportamentos, cognição e traços psicológicos.</div></div>
+        <div class="glossary-item"><div class="glossary-term">IA (Inteligência Artificial)</div><div class="glossary-def">Algoritmos, aprendizado de máquina e sistemas inteligentes.</div></div>
+        <div class="glossary-item"><div class="glossary-term">NEU (Neurociência)</div><div class="glossary-def">Estudo do cérebro, sistema nervoso e cognição biológica.</div></div>
+        <div class="glossary-item"><div class="glossary-term">BIO (Biologia)</div><div class="glossary-def">Ciências da vida, genética e sistemas biológicos.</div></div>
+        <div class="glossary-item"><div class="glossary-term">FIS (Física)</div><div class="glossary-def">Matéria, energia, forças e fenômenos naturais.</div></div>
+        <div class="glossary-item"><div class="glossary-term">SOC (Sociologia)</div><div class="glossary-def">Estruturas sociais, relações humanas e dinâmicas coletivas.</div></div>
+        <div class="glossary-item"><div class="glossary-term">ART (Artes)</div><div class="glossary-def">Expressão criativa, design, estética e comunicação visual.</div></div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">📞 Precisa de Suporte?</div>
+      <div class="contact-grid">
+        <div class="contact-card"><div class="icon">✉️</div><h3>Email</h3><a href="mailto:suporte@alquimiadosaber.pt">suporte@alquimiadosaber.pt</a></div>
+        <div class="contact-card"><div class="icon">💬</div><h3>WhatsApp</h3><a href="https://wa.me/351999999999" target="_blank">+351 999 999 999</a></div>
+        <div class="contact-card"><div class="icon">📚</div><h3>Documentação</h3><a href="?page=help" target="_top">Guia completo</a></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function toggleFaq(el){el.parentElement.classList.toggle('open');}
+  </script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — footer.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Rodapé do sistema. Exibe créditos, links institucionais, versão da aplicação e referências ao projeto Rio AI City e Porto Maravalley.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Créditos e copyright.
+   • Links institucionais (Rio AI City, Porto Maravalley).
+   • Versão da aplicação (scriptlet <?= data.version ?>).
+   • Links de ajuda e documentação.
+   • Redes sociais do projeto.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • ConfigService.getSetting('APP_VERSION') — versão.
+   • ConfigService.getSetting('INSTITUTIONAL_LINKS') — links.
+ * * Static content — conteúdo fixo, sem dados dinâmicos.
+   Institutional branding — links para ecossistema Rio AI City.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{--bg1:#160f2e;--bg2:#2a1a52;--text:#f3eeff;--muted:#b7a8e0;--ia:#ff4d8d;}
+    .footer{background:linear-gradient(180deg,transparent,rgba(0,0,0,.3));border-top:1px solid rgba(255,255,255,.1);padding:40px 20px 20px;margin-top:60px;color:var(--text);}
+    .footer-content{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:40px;}
+    .footer-section h3{font-size:1.1rem;margin-bottom:16px;color:var(--text);}
+    .footer-section p,.footer-section a{color:var(--muted);font-size:.9rem;line-height:1.8;text-decoration:none;}
+    .footer-section a:hover{color:var(--ia);text-decoration:underline;}
+    .footer-links{list-style:none;padding:0;margin:0;}
+    .footer-links li{margin-bottom:8px;}
+    .footer-bottom{max-width:1200px;margin:32px auto 0;padding-top:20px;border-top:1px solid rgba(255,255,255,.1);text-align:center;color:var(--muted);font-size:.85rem;}
+    .footer-logo{font-size:1.5rem;font-weight:800;margin-bottom:12px;background:linear-gradient(90deg,var(--ia),#4cc9f0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .social-links{display:flex;gap:12px;margin-top:12px;}
+    .social-links a,.social-links button{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;color:inherit;background:rgba(255,255,255,.06);border-radius:50%;cursor:pointer;transition:all .2s;}
+    .social-links a:hover,.social-links button:hover{background:var(--ia);transform:translateY(-2px);}
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-section">
+        <div class="footer-logo">🧪 Alquimia do Saber</div>
+        <p>Plataforma de orientação vocacional baseada em dimensões epistémicas e inteligência artificial.</p>
+        <div class="social-links">
+          <a href="https://www.linkedin.com/sharing/share-offsite/?url=" data-share-service="linkedin" target="_blank" rel="noopener noreferrer" title="Compartilhar no LinkedIn" aria-label="Compartilhar no LinkedIn">💼</a>
+          <a href="https://twitter.com/intent/tweet?url=" data-share-service="twitter" target="_blank" rel="noopener noreferrer" title="Compartilhar no X" aria-label="Compartilhar no X">🐦</a>
+          <button type="button" data-copy-page title="Copiar endereço desta página" aria-label="Copiar endereço desta página">🔗</button>
+        </div>
+      </div>
+      <div class="footer-section">
+        <h3>Navegação</h3>
+        <ul class="footer-links">
+          <li><a href="?page=index">🏠 Início</a></li>
+          <li><a href="?page=domain_map">🗺️ Mapa de Domínios</a></li>
+          <li><a href="?page=vocation_list">🧪 Catálogo de Vocações</a></li>
+          <li><a href="?page=scenario_list">📝 Cenários Epistémicos</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Recursos</h3>
+        <ul class="footer-links">
+          <li><a href="?page=help">❓ Ajuda</a></li>
+          <li><a href="?page=about">ℹ️ Sobre o Projeto</a></li>
+          <li><a href="?page=help">🔒 Privacidade e segurança</a></li>
+          <li><a href="?page=help">📄 Como usar o laboratório</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Ecossistema</h3>
+        <ul class="footer-links">
+          <li><a href="https://rioaicity.com" target="_blank">🌆 Rio AI City</a></li>
+          <li><a href="https://portomaravalley.com" target="_blank">🏔️ Porto Maravalley</a></li>
+          <li><a href="?page=about">🤝 Parcerias</a></li>
+          <li><a href="mailto:contato@alquimiadosaber.pt">✉️ Contacto</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© <span id="currentYear"></span> Alquimia do Saber. Desenvolvido com paixão pelo conhecimento. v<span id="appVersion">1.0.0</span></p>
+      <p style="margin-top:8px;font-size:.8rem;">Parte do ecossistema <strong>Rio AI City</strong> e <strong>Porto Maravalley</strong></p>
+    </div>
+  </footer>
+  <script>
+    document.getElementById('currentYear').textContent=new Date().getFullYear();
+    function pageAddress(){try{return window.top.location.href;}catch(error){return document.referrer||window.location.href;}}
+    document.querySelectorAll('[data-share-service]').forEach(function(link){
+      link.href += encodeURIComponent(pageAddress());
+    });
+    var copyButton=document.querySelector('[data-copy-page]');
+    if(copyButton){copyButton.addEventListener('click',function(){
+      var address=pageAddress();
+      var done=function(){copyButton.textContent='✓';copyButton.setAttribute('aria-label','Endereço copiado');setTimeout(function(){copyButton.textContent='🔗';copyButton.setAttribute('aria-label','Copiar endereço desta página');},1800);};
+      var fallback=function(){var field=document.createElement('textarea');field.value=address;document.body.appendChild(field);field.select();document.execCommand('copy');field.remove();done();};
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(address).then(done).catch(fallback);}
+      else{fallback();}
+    });}
+    if(typeof google!=='undefined'&&google.script&&google.script.run){
+      google.script.run.withSuccessHandler(function(r){
+        if(r&&r.success&&r.data&&r.data.version){
+          document.getElementById('appVersion').textContent=r.data.version;
+        }
+      }).api_getAppVersion();
+    }
+  </script>
+</body>
+</html>

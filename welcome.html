@@ -1,0 +1,346 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — welcome.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Painel pós-login. Saudação personalizada, progresso geral representado
+ *   como um tubo deitado parcialmente cheio, prévia do próximo dilema, mini
+ *   tubo do último resultado vocacional e atalhos para as áreas principais.
+ *
+ * INTEGRAÇÕES (google.script.run — bridge global api_*):
+ *   • api_getWelcomeData(token) — dados reais do percurso autenticado.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.1.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Bem-vindo</title>
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.06);
+      --text: #f3eeff; --muted: #b7a8e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1100px 650px at 15% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 28px 20px;
+    }
+    .wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: 20px; }
+    .greeting h1 { font-size: clamp(1.5rem, 4vw, 2.1rem); }
+    .greeting p { color: var(--muted); margin-top: 4px; }
+
+    .grid { display: grid; gap: 20px; grid-template-columns: 1.3fr .7fr; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 22px; padding: 24px;
+    }
+
+    /* Tubo horizontal de progresso */
+    .progress-tube-wrap { margin-top: 14px; }
+    .htube {
+      position: relative; height: 46px; border-radius: 999px;
+      border: 3px solid rgba(255,255,255,.35); background: rgba(255,255,255,.04);
+      overflow: hidden; box-shadow: inset 0 0 14px rgba(255,255,255,.08);
+    }
+    .htube .fill {
+      position: absolute; inset: 0; width: 0%;
+      background: linear-gradient(90deg, var(--fil), var(--bio));
+      transition: width .8s cubic-bezier(.34,1.56,.64,1);
+    }
+    .htube .fill::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(rgba(255,255,255,.25), rgba(0,0,0,.1));
+    }
+    .htube .pct {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: .9rem; z-index: 2; text-shadow: 0 1px 3px rgba(0,0,0,.6);
+    }
+    .progress-caption { display: flex; justify-content: space-between; margin-top: 8px; font-size: .82rem; color: var(--muted); }
+
+    /* Próximo dilema */
+    .next-scenario { margin-top: 8px; }
+    .tag { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: .74rem;
+      font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+      background: rgba(139,92,246,.25); color: #cdb8ff; border: 1px solid var(--neu); }
+    .next-scenario h2 { font-size: 1.15rem; margin: 10px 0 6px; }
+    .next-scenario p { color: var(--muted); font-size: .9rem; line-height: 1.5; }
+    .cta-row { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      padding: 12px 24px; border: 0; border-radius: 999px; font-weight: 800; font-size: .95rem;
+      color: #fff; cursor: pointer; text-decoration: none; display: inline-block;
+      background: linear-gradient(90deg, var(--ia), #c13cff); box-shadow: 0 6px 20px rgba(255,77,141,.4);
+      transition: transform .15s;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-ghost { background: transparent; color: var(--fil); border: 2px solid var(--fil); box-shadow: none; }
+
+    /* XP / nível */
+    .stat-row { display: flex; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
+    .stat { flex: 1; min-width: 100px; background: rgba(255,255,255,.05); border-radius: 16px; padding: 14px; text-align: center; }
+    .stat .num { font-size: 1.5rem; font-weight: 800; }
+    .stat .lbl { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+
+    /* Último resultado (mini tubo) */
+    .result-card { display: flex; gap: 16px; align-items: center; }
+    .mini-tube {
+      flex: 0 0 40px; height: 110px; position: relative;
+      border: 2.5px solid rgba(255,255,255,.35); border-top-width: 0;
+      border-radius: 0 0 20px 20px; background: rgba(255,255,255,.04);
+      display: flex; flex-direction: column-reverse; overflow: hidden;
+    }
+    .mini-tube::before { content:""; position:absolute; top:0; left:-6px; right:-6px; height:7px;
+      border:2.5px solid rgba(255,255,255,.35); border-radius:6px; z-index:3; }
+    .mini-tube .layer { width: 100%; }
+    .result-info h3 { font-size: .98rem; margin-bottom: 4px; }
+    .result-info p { color: var(--muted); font-size: .82rem; }
+    .quick-actions { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); margin-top: 14px; }
+    .quick-actions a {
+      text-decoration: none; color: var(--text); background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 14px 10px;
+      text-align: center; font-size: .85rem; font-weight: 700; transition: transform .15s, background .15s;
+    }
+    .quick-actions a:hover { transform: translateY(-2px); background: rgba(255,255,255,.09); }
+    .quick-actions .emoji { display: block; font-size: 1.4rem; margin-bottom: 4px; }
+    .motivational { margin-top: 18px; font-size: .88rem; color: var(--muted); font-style: italic; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="greeting">
+      <h1 id="greeting-text">Bem-vindo(a) de volta! 🧪</h1>
+      <p>Seu laboratório está pronto para mais uma mistura.</p>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h3>Seu progresso no simulador</h3>
+        <div class="progress-tube-wrap">
+          <div class="htube"><div class="fill" id="progress-fill"></div><span class="pct" id="progress-pct">0%</span></div>
+          <div class="progress-caption"><span id="progress-caption-left">0 perguntas exploradas</span><span>Meta: testar diferentes formas de pensar</span></div>
+        </div>
+
+        <div class="next-scenario">
+          <span class="tag" id="next-category">Próximo dilema</span>
+          <h2 id="next-title">Carregando…</h2>
+          <p id="next-text"></p>
+        </div>
+
+        <div class="cta-row">
+          <a class="btn" data-auth-page="laboratory" href="#" target="_top">Ir para o laboratório ⚗️</a>
+          <a class="btn btn-ghost" data-auth-page="domain_map" href="#" target="_top">Explorar áreas do saber</a>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat"><div class="num" id="stat-level">1</div><div class="lbl">Nível</div></div>
+          <div class="stat"><div class="num" id="stat-xp">0</div><div class="lbl">XP</div></div>
+          <div class="stat"><div class="num" id="stat-scenarios">0</div><div class="lbl">Dilemas</div></div>
+        </div>
+
+        <p class="motivational" id="motivational">Não existe mistura única: explique, compare e experimente outra combinação. ✨</p>
+      </section>
+
+      <aside class="card">
+        <h3>Seu último mapa de escolhas</h3>
+        <div class="result-card" style="margin-top:14px;">
+          <div class="mini-tube" id="result-tube"></div>
+          <div class="result-info">
+            <h3 id="result-title">Ainda não revelado</h3>
+            <p id="result-subtitle">Explore mais perguntas para observar quais áreas você escolhe em cada situação.</p>
+          </div>
+        </div>
+        <a class="btn" data-auth-page="result_dashboard" style="width:100%; text-align:center; margin-top:14px;" href="#" target="_top">Ver resultado completo</a>
+
+        <h3 style="margin-top:22px;">Atalhos</h3>
+        <div class="quick-actions">
+          <a data-auth-page="profile" href="#" target="_top"><span class="emoji">👤</span>Perfil</a>
+          <a data-auth-page="achievement" href="#" target="_top"><span class="emoji">🏅</span>Conquistas</a>
+          <a data-auth-page="domain_map" href="#" target="_top"><span class="emoji">🗺️</span>Domínios</a>
+          <a data-auth-page="result_dashboard" href="#" target="_top"><span class="emoji">🧭</span>Meu percurso</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    var DIMENSIONS = {
+      IA: 'var(--ia)', FIL: 'var(--fil)', PSI: 'var(--psi)', NEU: 'var(--neu)',
+      BIO: 'var(--bio)', FIS: 'var(--fis)', SOC: 'var(--soc)', ART: 'var(--art)'
+    };
+
+    var pageToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var appBaseUrl = '<?= getScriptUrl() ?>';
+    var EMPTY_DATA = { fullName: 'Alquimista', level: 1, xp: 0, xpToNextLevel: 300,
+      scenariosCompleted: 0, scenariosTotal: 0, nextScenario: null, lastResult: null };
+
+    document.querySelectorAll('[data-auth-page]').forEach(function (link) {
+      link.href = appBaseUrl + '?page=' + encodeURIComponent(link.getAttribute('data-auth-page')) +
+        '&token=' + encodeURIComponent(pageToken);
+    });
+
+    function fillMiniTube(tubeEl, formula) {
+      tubeEl.innerHTML = '';
+      String(formula || '').split(',').forEach(function (part) {
+        var bits = part.split(':');
+        var dim = bits[0].trim().toUpperCase();
+        var q = parseInt(bits[1], 10) || 0;
+        if (!DIMENSIONS[dim] || q <= 0) return;
+        var layer = document.createElement('div');
+        layer.className = 'layer';
+        layer.style.height = (q * 22) + '%';
+        layer.style.background = 'linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), ' + DIMENSIONS[dim];
+        tubeEl.appendChild(layer);
+      });
+    }
+
+    function render(data) {
+      document.getElementById('greeting-text').textContent = 'Bem-vindo(a) de volta, ' + (data.fullName || 'Alquimista') + '! 🧪';
+      document.getElementById('stat-level').textContent = data.level;
+      document.getElementById('stat-xp').textContent = data.xp + '/' + data.xpToNextLevel;
+      document.getElementById('stat-scenarios').textContent = data.scenariosCompleted;
+
+      var pct = Math.round((data.scenariosCompleted / Math.max(1, data.scenariosTotal)) * 100);
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-pct').textContent = pct + '%';
+      document.getElementById('progress-caption-left').textContent = data.scenariosCompleted + ' de ' + data.scenariosTotal + ' dilemas resolvidos';
+
+      if (data.nextScenario) {
+        document.getElementById('next-category').textContent = data.nextScenario.category || 'Próximo dilema';
+        document.getElementById('next-title').textContent = data.nextScenario.title;
+        document.getElementById('next-text').textContent = data.nextScenario.text || '';
+      } else {
+        document.getElementById('next-title').textContent = data.scenariosTotal ? 'Percurso concluído' : 'Nenhum dilema disponível';
+        document.getElementById('next-text').textContent = data.scenariosTotal ? 'Você já explorou todos os dilemas disponíveis.' : 'Novos dilemas aparecerão aqui quando forem publicados.';
+      }
+
+      if (data.lastResult) {
+        fillMiniTube(document.getElementById('result-tube'), data.lastResult.formula);
+        document.getElementById('result-title').textContent = data.lastResult.title;
+        document.getElementById('result-subtitle').textContent = data.lastResult.confidence
+          ? ('Semelhança dentro do modelo: ' + data.lastResult.confidence + '%. Não é teste nem diagnóstico.')
+          : 'Explore mais perguntas para observar como suas escolhas mudam.';
+      }
+    }
+
+    function loadWelcome() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (result) { render(result && result.success && result.data ? result.data : EMPTY_DATA); })
+          .withFailureHandler(function () { render(EMPTY_DATA); })
+          .api_getWelcomeData(pageToken);
+      } else {
+        render(EMPTY_DATA);
+      }
+    }
+
+    loadWelcome();
+  </script>
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — domain_map.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Mapa visual dos 6 domínios vocacionais (A-F), cada um representado por
+ *   um frasco grande com gradiente de duas cores (mistura das dimensões
+ *   dominantes do domínio). Card com ícone, descrição, contagem de vocações
+ *   e barra de popularidade. Clicar leva ao catálogo já filtrado por domínio.
+ *
+ * INTEGRAÇÕES (google.script.run — bridge global api_*):
+ *   • api_getDomainMap() — [{ code, name, description, icon, vocationCount,
+ *     popularityPercent }]. Degrada para os 6 domínios demo do Relatorio.md
+ *     quando google.script.run não está disponível.
+ *
+ * NAVEGAÇÃO:
+ *   Cada card aponta para ?page=vocation_list&domain=X — vocation_list.html
+ *   lê esse parâmetro e pré-seleciona o filtro correspondente.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.1.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Mapa dos Domínios</title>
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.06);
+      --text: #f3eeff; --muted: #b7a8e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 700px at 50% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 28px 20px 60px;
+    }
+    header { max-width: 1080px; margin: 0 auto 26px; text-align: center; }
+    header h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+    header p { color: var(--muted); margin-top: 6px; }
+
+    .map { max-width: 1080px; margin: 0 auto; display: grid; gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+    .domain-card {
+      background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 24px; padding: 22px; display: flex; gap: 18px;
+      cursor: pointer; text-decoration: none; color: var(--text);
+      transition: transform .18s, box-shadow .18s;
+    }
+    .domain-card:hover { transform: translateY(-5px); box-shadow: 0 16px 38px rgba(0,0,0,.45); }
+
+    .flask {
+      flex: 0 0 70px; height: 170px; position: relative; align-self: center;
+      border: 3px solid rgba(255,255,255,.35); border-top-width: 0;
+      border-radius: 0 0 35px 35px; overflow: hidden;
+      display: flex; align-items: flex-end; justify-content: center;
+      box-shadow: inset 0 0 16px rgba(255,255,255,.08);
+    }
+    .flask::before { content:""; position:absolute; top:0; left:-8px; right:-8px; height:9px;
+      border:3px solid rgba(255,255,255,.35); border-radius:7px; z-index:3; }
+    .flask::after { content:""; position:absolute; top:6%; left:14%; width:10px; height:80%;
+      background: linear-gradient(rgba(255,255,255,.5), transparent); border-radius:7px; z-index:3; }
+    .flask .fill { position: absolute; inset: 0; top: 15%; }
+    .flask .icon { position: relative; z-index: 4; font-size: 1.8rem; margin-bottom: 14px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,.4)); }
+
+    .domain-info { flex: 1; min-width: 0; }
+    .domain-code { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: .74rem;
+      font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+      background: rgba(255,255,255,.1); color: var(--muted); margin-bottom: 8px; }
+    .domain-name { font-size: 1.08rem; margin-bottom: 6px; line-height: 1.3; }
+    .domain-desc { color: var(--muted); font-size: .84rem; line-height: 1.5; margin-bottom: 12px; }
+    .domain-count { font-size: .8rem; font-weight: 700; margin-bottom: 6px; }
+
+    .pop-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .pop-bar .fill-bar { height: 100%; border-radius: 999px; transition: width .8s ease; }
+    .pop-label { font-size: .74rem; color: var(--muted); margin-top: 4px; }
+
+    .explore { margin-top: 12px; font-size: .82rem; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🗺️ Mapa dos Domínios do Saber</h1>
+    <p>Seis territórios, cada um misturando saberes de um jeito diferente. Explore para ver as vocações de cada um.</p>
+  </header>
+
+  <main class="map" id="map"></main>
+
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    // Cada domínio ganha um gradiente de 2 cores representando sua mistura
+    // dominante — visualmente distinto das fórmulas individuais de vocação.
+    var DOMAIN_META = {
+      A: { name: 'Sistemas Cognitivos & Filosofia da Mente', icon: '🧠', gradient: ['--neu', '--ia'],
+        description: 'Onde a mente humana e a inteligência artificial se encontram — ética, cognição e a fronteira entre pensar e calcular.' },
+      B: { name: 'Tecnobiologia & Ciências da Vida', icon: '🧬', gradient: ['--bio', '--fis'],
+        description: 'A vida reprogramada por dados — bioengenharia, genética e simulação computacional dos processos biológicos.' },
+      C: { name: 'Sociedade Digital & Políticas Algorítmicas', icon: '🌐', gradient: ['--soc', '--fil'],
+        description: 'Como algoritmos moldam comunidades inteiras — sociologia, ética e o impacto social da tecnologia.' },
+      D: { name: 'Estética Generativa & Design de Experiência', icon: '🎨', gradient: ['--art', '--ia'],
+        description: 'Arte, semiótica e design na era dos algoritmos criativos — onde a sensibilidade humana ganha novas ferramentas.' },
+      E: { name: 'Computação Avançada & Ciências de Fronteira', icon: '⚛️', gradient: ['--fis', '--fil'],
+        description: 'Física, computação de ponta e os limites do conhecimento — da matéria aos sistemas mais complexos do universo.' },
+      F: { name: 'Neuropsicologia Tecnológica & Saúde Digital', icon: '💊', gradient: ['--psi', '--art'],
+        description: 'Saúde mental e bem-estar potencializados por dados — psicologia, neurociência e cuidado de precisão.' }
+    };
+
+    var DEMO_DOMAINS = [
+      { code: 'A', vocationCount: 10, popularityPercent: 78 },
+      { code: 'B', vocationCount: 10, popularityPercent: 54 },
+      { code: 'C', vocationCount: 10, popularityPercent: 61 },
+      { code: 'D', vocationCount: 10, popularityPercent: 45 },
+      { code: 'E', vocationCount: 10, popularityPercent: 39 },
+      { code: 'F', vocationCount: 10, popularityPercent: 67 }
+    ];
+
+    function buildCard(domainData) {
+      var meta = DOMAIN_META[domainData.code] || {};
+      var card = document.createElement('a');
+      card.className = 'domain-card';
+      card.href = '?page=vocation_list&domain=' + encodeURIComponent(domainData.code) +
+        '&token=' + encodeURIComponent(authToken);
+      card.target = '_top';
+
+      var flask = document.createElement('div');
+      flask.className = 'flask';
+      flask.style.background = 'rgba(255,255,255,.04)';
+      var fill = document.createElement('div');
+      fill.className = 'fill';
+      fill.style.background = 'linear-gradient(180deg, var(' + meta.gradient[0] + '), var(' + meta.gradient[1] + '))';
+      flask.appendChild(fill);
+      var icon = document.createElement('span');
+      icon.className = 'icon';
+      icon.textContent = meta.icon || '🧪';
+      flask.appendChild(icon);
+      card.appendChild(flask);
+
+      var info = document.createElement('div');
+      info.className = 'domain-info';
+
+      var code = document.createElement('span');
+      code.className = 'domain-code';
+      code.textContent = 'Domínio ' + domainData.code;
+      info.appendChild(code);
+
+      var name = document.createElement('h2');
+      name.className = 'domain-name';
+      name.textContent = meta.name || ('Domínio ' + domainData.code);
+      info.appendChild(name);
+
+      var desc = document.createElement('p');
+      desc.className = 'domain-desc';
+      desc.textContent = meta.description || '';
+      info.appendChild(desc);
+
+      var count = document.createElement('div');
+      count.className = 'domain-count';
+      count.textContent = domainData.vocationCount + ' ciências catalogadas';
+      info.appendChild(count);
+
+      var popBar = document.createElement('div');
+      popBar.className = 'pop-bar';
+      var fillBar = document.createElement('div');
+      fillBar.className = 'fill-bar';
+      fillBar.style.width = domainData.popularityPercent + '%';
+      fillBar.style.background = 'linear-gradient(90deg, var(' + meta.gradient[0] + '), var(' + meta.gradient[1] + '))';
+      popBar.appendChild(fillBar);
+      info.appendChild(popBar);
+
+      var popLabel = document.createElement('div');
+      popLabel.className = 'pop-label';
+      popLabel.textContent = domainData.popularityPercent + '% dos alquimistas mais compatíveis com este domínio';
+      info.appendChild(popLabel);
+
+      var explore = document.createElement('div');
+      explore.className = 'explore';
+      explore.style.color = 'var(' + meta.gradient[1] + ')';
+      explore.textContent = 'Explorar domínio →';
+      info.appendChild(explore);
+
+      card.appendChild(info);
+      return card;
+    }
+
+    function render(domains) {
+      var map = document.getElementById('map');
+      map.innerHTML = '';
+      domains.forEach(function (d) { map.appendChild(buildCard(d)); });
+    }
+
+    function loadDomains() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (result) { render(result && result.success && result.data && result.data.length ? result.data : DEMO_DOMAINS); })
+          .withFailureHandler(function () { render(DEMO_DOMAINS); })
+          .api_getDomainMap(authToken);
+      } else {
+        render(DEMO_DOMAINS);
+      }
+    }
+
+    loadDomains();
+  </script>
+</body>
+</html>

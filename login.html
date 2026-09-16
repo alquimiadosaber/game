@@ -1,0 +1,408 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — login.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Formulário de login com identidade visual do laboratório: um tubo de
+ *   ensaio decorativo "enche" conforme os campos são preenchidos (e-mail =
+ *   camada azul FIL, senha = camada rosa IA), reforçando a metáfora lúdica.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • api_login(email, password) — bridge global esperada em AuthService/Code
+ *     (google.script.run só invoca funções top-level; os serviços IIFE devem
+ *     expor bridges api_*). Falhas de backend são exibidas sem login fictício.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   A senha literal é enviada ao backend e comparada com a coluna Password;
+ *   nunca é logada nem devolvida ao cliente.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.1.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Entrar</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.07);
+      --text: #f3eeff; --muted: #b7a8e0; --danger: #ff6b6b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1000px 600px at 30% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .panel {
+      display: flex; gap: 40px; align-items: center; flex-wrap: wrap; justify-content: center;
+      background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 28px; padding: 40px; max-width: 720px; width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+    .auth-brand { width: 84px; height: 84px; margin: 0 auto 18px; }
+    .codex-login-logo, .brand-mark-fallback { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 20px; }
+    .codex-login-logo { object-fit: contain; box-shadow: 0 12px 28px rgba(0,0,0,.3); }
+    .brand-mark-fallback { background: #17362e; color: #fff; font-weight: 900; letter-spacing: .08em; }
+
+    /* Tubo decorativo que enche conforme o formulário é preenchido */
+    .tube-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .tube {
+      position: relative; width: 68px; height: 200px;
+      border: 3px solid rgba(255,255,255,.35); border-top-width: 0;
+      border-radius: 0 0 34px 34px; background: rgba(255,255,255,.04);
+      display: flex; flex-direction: column-reverse; overflow: hidden;
+      box-shadow: inset 0 0 16px rgba(255,255,255,.08);
+    }
+    .tube::before {
+      content: ""; position: absolute; top: 0; left: -8px; right: -8px; height: 10px;
+      border: 3px solid rgba(255,255,255,.35); border-radius: 8px; z-index: 3;
+    }
+    .tube::after {
+      content: ""; position: absolute; top: 8%; left: 14%; width: 10px; height: 78%;
+      background: linear-gradient(rgba(255,255,255,.5), transparent); border-radius: 8px; z-index: 3;
+    }
+    .layer { width: 100%; height: 0; transition: height .7s cubic-bezier(.34,1.56,.64,1); position: relative; }
+    #layer-email { background: linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), var(--fil); }
+    #layer-pass  { background: linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), var(--ia); }
+    #layer-pass .surface {
+      position: absolute; top: -3px; left: 0; right: 0; height: 6px;
+      background: rgba(255,255,255,.28); border-radius: 50%; filter: blur(1px);
+    }
+    .tube-hint { color: var(--muted); font-size: .8rem; text-align: center; max-width: 130px; }
+
+    /* Formulário */
+    form { flex: 1; min-width: 260px; }
+    h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    .sub { color: var(--muted); margin-bottom: 24px; font-size: .95rem; }
+    label { display: block; font-weight: 600; font-size: .9rem; margin: 14px 0 6px; }
+    input {
+      width: 100%; padding: 13px 16px; border-radius: 14px; font-size: 1rem;
+      border: 2px solid rgba(255,255,255,.18); background: rgba(0,0,0,.25); color: var(--text);
+      outline: none; transition: border-color .2s, box-shadow .2s;
+    }
+    .password-field { position: relative; }
+    .password-field input { padding-right: 56px; }
+    button.password-toggle {
+      position: absolute; top: 50%; right: 8px;
+      display: grid; place-items: center;
+      width: 38px; height: 38px; min-height: 38px;
+      margin: 0; padding: 0; transform: translateY(-50%);
+      border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
+      background: rgba(255,255,255,.08); box-shadow: none;
+      color: var(--text);
+    }
+    button.password-toggle .material-icons { font-size: 20px; line-height: 1; }
+    button.password-toggle:hover:not(:disabled) { transform: translateY(-50%); background: rgba(255,255,255,.14); }
+    #email:focus { border-color: var(--fil); box-shadow: 0 0 0 4px rgba(76,201,240,.18); }
+    #password:focus { border-color: var(--ia); box-shadow: 0 0 0 4px rgba(255,77,141,.18); }
+    button {
+      width: 100%; margin-top: 22px; padding: 14px; border: 0; border-radius: 999px;
+      font-size: 1.05rem; font-weight: 800; color: #fff; cursor: pointer;
+      background: linear-gradient(90deg, var(--ia), #c13cff);
+      box-shadow: 0 6px 24px rgba(255,77,141,.4);
+      transition: transform .15s, opacity .15s;
+    }
+    button:hover:not(:disabled) { transform: translateY(-2px); }
+    button:disabled { opacity: .55; cursor: wait; }
+    .links { margin-top: 18px; display: flex; justify-content: space-between; font-size: .88rem; flex-wrap: wrap; gap: 8px; }
+    .links a { color: var(--fil); text-decoration: none; }
+    .links a:hover { text-decoration: underline; }
+    button:focus-visible, .links a:focus-visible {
+      outline: 3px solid rgba(76,201,240,.45); outline-offset: 3px;
+    }
+    .msg { margin-top: 16px; padding: 12px 14px; border-radius: 12px; font-size: .9rem; display: none; }
+    .msg.error { display: block; background: rgba(255,107,107,.14); border: 1px solid var(--danger); color: #ffc9c9; }
+    .msg.info  { display: block; background: rgba(76,201,240,.12); border: 1px solid var(--fil); color: #cdefff; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 480px) {
+      body { padding: 12px; }
+      .panel { padding: 24px 16px; gap: 24px; }
+      .panel form { min-width: 0; flex-basis: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <!-- Anúncio acessível: fica fora da zona decorativa aria-hidden -->
+  <div class="sr-only" id="tube-status" aria-live="polite" aria-atomic="true"></div>
+
+  <div class="panel">
+    <div class="tube-wrap" aria-hidden="true">
+      <div class="tube">
+        <div class="layer" id="layer-email"></div>
+        <div class="layer" id="layer-pass"><div class="surface"></div></div>
+      </div>
+      <div class="tube-hint" id="tube-hint" aria-hidden="true">Preencha os frascos para ativar a poção de entrada 🧪</div>
+    </div>
+
+    <form id="login-form" autocomplete="on" aria-describedby="feedback">
+      <div class="auth-brand" data-brand-logo aria-label="Marca Alquimia do Saber"><span class="brand-mark-fallback">AS</span></div>
+      <h1>Bem-vindo de volta, alquimista! ⚗️</h1>
+      <p class="sub">Entre com seu e-mail e sua senha para continuar suas misturas.</p>
+
+      <label for="email">E-mail</label>
+      <input type="email" id="email" name="email" required minlength="3" maxlength="254"
+             autocomplete="email" inputmode="email" autocapitalize="none"
+             autocorrect="off" spellcheck="false" enterkeyhint="next"
+             placeholder="voce@escola.br" autofocus>
+
+      <label for="password">Senha</label>
+      <div class="password-field">
+        <input inputmode="text" type="password" id="password" name="password" required minlength="8" maxlength="128"
+               autocomplete="current-password" enterkeyhint="go" placeholder="••••••••">
+        <button class="password-toggle" id="password-toggle" type="button"
+                aria-controls="password" aria-pressed="false" aria-label="Mostrar senha"
+          ><i class="material-icons" aria-hidden="true">visibility</i></button>
+      </div>
+
+      <button type="submit" id="submit-btn">Entrar no laboratório</button>
+      <div class="msg" id="feedback" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+      <div class="links">
+        <a href="<?!= getScriptUrl() ?>?page=forgot_password" target="_top">Esqueci a senha</a>
+        <a href="<?!= getScriptUrl() ?>?page=register" target="_top">Criar conta</a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    var REDIRECT_TO = '<?= redirectTo ?>' || 'scenario_list';
+    var APP_BASE_URL = '<?= getScriptUrl() ?>';
+    var emailInput = document.getElementById('email');
+    var passInput = document.getElementById('password');
+    var feedback = document.getElementById('feedback');
+    var submitBtn = document.getElementById('submit-btn');
+    var loginForm = document.getElementById('login-form');
+
+    (function mountBrandLogo() {
+      var target = document.querySelector('[data-brand-logo]');
+      if (!target) return;
+      var image = document.createElement('img');
+      image.className = 'codex-login-logo';
+      image.src = 'data:image/png;base64,<?!= includeInlineData("BrandLogoBase64") ?>';
+      image.alt = 'Marca Alquimia do Saber';
+      target.replaceChildren(image);
+    }());
+
+    document.getElementById('password-toggle').addEventListener('click', function () {
+      var showing = passInput.type === 'text';
+      passInput.type = showing ? 'password' : 'text';
+      var icon = this.querySelector('.material-icons');
+      if (icon) icon.textContent = showing ? 'visibility' : 'visibility_off';
+      else this.textContent = showing ? 'Mostrar' : 'Ocultar';
+      this.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
+      this.setAttribute('aria-pressed', showing ? 'false' : 'true');
+      passInput.focus();
+    });
+
+    function setSubmitting(submitting) {
+      submitBtn.disabled = submitting;
+      submitBtn.setAttribute('aria-busy', submitting ? 'true' : 'false');
+      loginForm.setAttribute('aria-busy', submitting ? 'true' : 'false');
+    }
+
+    // O tubo enche: e-mail válido = camada azul (FIL), senha ≥8 = camada rosa (IA).
+    function updateTube() {
+      var emailOk = emailInput.validity.valid && emailInput.value.length > 3;
+      var passOk = passInput.value.length >= 8;
+      document.getElementById('layer-email').style.height = emailOk ? '44%' : (emailInput.value ? '18%' : '0');
+      document.getElementById('layer-pass').style.height = passOk ? '44%' : (passInput.value ? '18%' : '0');
+      var hintText = emailOk && passOk ? 'Poção pronta! ✨' : 'Preencha os frascos para ativar a poção de entrada 🧪';
+      document.getElementById('tube-hint').textContent = hintText;
+      // Anuncia para leitores de tela somente quando o estado muda para pronto
+      var status = document.getElementById('tube-status');
+      if (status) status.textContent = emailOk && passOk ? 'Formulário completo. Poção pronta!' : '';
+    }
+    emailInput.addEventListener('input', updateTube);
+    passInput.addEventListener('input', updateTube);
+
+    function showMessage(kind, text) {
+      feedback.className = 'msg ' + kind;
+      feedback.textContent = text;
+    }
+
+    function resolveBaseUrl() {
+      if (APP_BASE_URL && APP_BASE_URL.indexOf('http') === 0) {
+        return APP_BASE_URL;
+      }
+      try {
+        var current = String(window.location.href || '');
+        if (current.indexOf('http') === 0) {
+          return current.split('?')[0];
+        }
+      } catch (e) {}
+      return '';
+    }
+
+    function onLoginResult(result) {
+      setSubmitting(false);
+      if (result && result.success && result.data && result.data.token) {
+        var base = resolveBaseUrl();
+        var targetPage = REDIRECT_TO && REDIRECT_TO !== 'login' ? REDIRECT_TO : 'scenario_list';
+        var targetUrl = (base ? base : '') +
+          '?page=' + encodeURIComponent(targetPage) +
+          '&token=' + encodeURIComponent(result.data.token);
+
+        try { localStorage.setItem('alquimia_session_token', result.data.token); } catch (err) {}
+
+        feedback.className = 'msg info';
+        feedback.innerHTML = '';
+        var msgText = document.createElement('div');
+        msgText.textContent = 'Login efetuado! Redirecionando ao laboratório…';
+        var continueLink = document.createElement('a');
+        continueLink.href = targetUrl;
+        continueLink.target = '_top';
+        continueLink.style.cssText = 'display:inline-block;margin-top:10px;padding:10px 20px;background:linear-gradient(90deg,var(--fil,#4cc9f0),#38bdf8);color:#160f2e;font-weight:800;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(76,201,240,.4);cursor:pointer;';
+        continueLink.textContent = 'Entrar no laboratório ➔';
+        feedback.appendChild(msgText);
+        feedback.appendChild(continueLink);
+
+        try {
+          if (window.top && window.top !== window.self) {
+            window.top.location.href = targetUrl;
+          } else {
+            window.location.href = targetUrl;
+          }
+        } catch (navErr) {
+          try {
+            window.location.href = targetUrl;
+          } catch (innerErr) {}
+        }
+
+        setTimeout(function () {
+          try { continueLink.click(); } catch (clickErr) {}
+        }, 150);
+      } else {
+        showMessage('error', (result && result.error) || 'Credenciais inválidas.');
+      }
+    }
+
+    function onLoginFailure(err) {
+      setSubmitting(false);
+      showMessage('error', 'Falha ao comunicar com o servidor: ' + (err && err.message ? err.message : err));
+    }
+
+    loginForm.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      setSubmitting(true);
+      showMessage('info', 'Misturando os reagentes…');
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onLoginResult)
+          .withFailureHandler(onLoginFailure)
+          .api_login(emailInput.value.trim(), passInput.value);
+      } else {
+        setSubmitting(false);
+        showMessage('error', 'Autenticação disponível somente no aplicativo publicado.');
+      }
+    });
+  </script>
+  <?!= include('HealthCheck') ?>
+</body>
+</html>

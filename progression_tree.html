@@ -1,0 +1,173 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — progression_tree.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Árvore visual de progressão do simulador. Caminho completo, cenários desbloqueados, lockados e próximos marcos.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Timeline de cenários concluídos.
+   • Cenários lockados com pré-requisitos visíveis.
+   • Próximos marcos (milestones).
+   • Percentagem de progresso geral.
+   • Indicador de vocação final desbloqueada.
+   • Botão de continuar progresso.
+   • Vista em árvore ou timeline.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • ProgressionService.getProgressionTree(userId) — árvore de progressão.
+   • ProgressionService.getNextMilestone(userId) — próximo marco.
+   • ProgressionService.getProgressionPercent(userId) — percentagem.
+   • ScenarioController.getNextScenario(userId) — próximo cenário.
+ * * Visual progression — árvore/timeline visual.
+   Milestone system — marcos intermediários motivacionais.
+   Lock/unlock indicators — indicadores claros de estado.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Progressão</title>
+  <style>
+    :root { --bg:#160f2e; --panel:rgba(255,255,255,.08); --line:rgba(255,255,255,.16); --text:#f3eeff; --muted:#b7a8e0; --accent:#ff4d8d; --ok:#2dd4a0; }
+    * { box-sizing:border-box; } body { margin:0; min-height:100vh; padding:28px 20px 60px; color:var(--text); background:radial-gradient(1100px 700px at 50% -10%,#2a1a52,var(--bg) 70%); font-family:system-ui,"Segoe UI",sans-serif; } main { max-width:1100px; margin:auto; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:22px; } h1 { margin:0; font-size:clamp(1.7rem,4vw,2.5rem); } h2 { margin-top:0; font-size:1.1rem; } .muted { color:var(--muted); }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:22px; margin-bottom:18px; } .summary { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:14px; } .metric { background:rgba(255,255,255,.06); padding:16px; border-radius:12px; } .metric strong { display:block; font-size:2rem; color:var(--ok); } .progress { height:12px; background:rgba(255,255,255,.12); border-radius:99px; overflow:hidden; margin-top:12px; } .progress i { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--ok)); }
+    .scenario-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:0; list-style:none; } .scenario { padding:14px; border:1px solid var(--line); border-radius:12px; } .scenario.done { border-color:rgba(45,212,160,.6); } .scenario-title { font-weight:700; } .scenario small { display:block; color:var(--muted); margin-top:5px; } .state { float:right; color:var(--ok); }
+    .milestone { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,.1); } .milestone:last-child { border-bottom:0; } .milestone input { accent-color:var(--ok); } a,button { min-height:48px; border:0; border-radius:10px; padding:10px 16px; font:inherit; font-weight:700; cursor:pointer; } a { display:inline-flex; align-items:center; color:var(--text); background:rgba(255,255,255,.1); text-decoration:none; } button { color:#fff; background:var(--accent); } .status { min-height:24px; color:var(--muted); } .error { color:#fecaca; }
+    @media (max-width:720px) { .summary,.scenario-list { grid-template-columns:1fr; } }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <main id="progression_tree-container">
+    <header><div><h1>Minha progressão</h1><p class="muted">Acompanhe cenários, marcos e próximos passos.</p></div><a href="?page=welcome&amp;token=<?= session && session.sessionId ? session.sessionId : '' ?>">Voltar ao início</a></header>
+    <p id="status" class="status" role="status" aria-live="polite">Carregando progressão...</p>
+    <section class="summary"><article class="metric"><span class="muted">Progresso geral</span><strong id="percent">0%</strong><div class="progress"><i id="progressBar" style="width:0%"></i></div></article><article class="metric"><span class="muted">Cenários concluídos</span><strong id="completed">0</strong><span id="available" class="muted">de 0 disponíveis</span></article><article class="metric"><span class="muted">Próximo marco</span><strong id="remaining">—</strong><span id="milestoneName" class="muted">Nenhum marco pendente</span></article></section>
+    <section class="card"><h2>Marcos da jornada</h2><div id="milestones" class="muted">Sem marcos carregados.</div></section>
+    <section class="card"><h2>Cenários</h2><ul id="scenarios" class="scenario-list"><li class="muted">Carregando cenários...</li></ul></section>
+    <section class="card" id="nextCard" hidden><h2>Próximo passo recomendado</h2><p id="nextScenario" class="muted"></p><button type="button" id="continueButton">Continuar cenário</button></section>
+  </main>
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    function loadProgression() { return new Promise(function(resolve, reject) { if (!authToken || !window.google || !google.script || !google.script.run) { reject(new Error('Sessão indisponível.')); return; } google.script.run.withSuccessHandler(function(result) { if (!result || !result.success) { reject(new Error(result && result.error ? result.error : 'Não foi possível carregar a progressão.')); return; } resolve(result.data); }).withFailureHandler(function(error) { reject(new Error(error && error.message ? error.message : 'Falha de comunicação.')); }).api_getProgressionDashboard(authToken); }); }
+    function render(data) {
+      var tree = data.tree || {}, percent = Math.max(0, Math.min(100, Number(data.percent || 0))); document.getElementById('percent').textContent = percent + '%'; document.getElementById('progressBar').style.width = percent + '%'; document.getElementById('completed').textContent = tree.completed || 0; document.getElementById('available').textContent = 'de ' + (tree.available || 0) + ' disponíveis';
+      var milestone = data.nextMilestone && data.nextMilestone.milestone; document.getElementById('remaining').textContent = data.nextMilestone ? data.nextMilestone.remaining : '✓'; document.getElementById('milestoneName').textContent = milestone ? milestone.name : 'Jornada concluída';
+      var milestoneHost = document.getElementById('milestones'); milestoneHost.innerHTML = ''; (tree.milestones || []).forEach(function(item) { var row = document.createElement('div'); row.className = 'milestone'; var icon = document.createElement('span'); icon.textContent = item.achieved ? '✅' : '⬜'; var label = document.createElement('span'); label.textContent = item.name + ' — ' + item.threshold + ' cenário(s)'; row.appendChild(icon); row.appendChild(label); milestoneHost.appendChild(row); }); if (!milestoneHost.children.length) milestoneHost.textContent = 'Nenhum marco configurado.';
+      var host = document.getElementById('scenarios'); host.innerHTML = ''; (tree.scenarios || []).forEach(function(item) { var row = document.createElement('li'); row.className = 'scenario' + (item.completed ? ' done' : ''); var state = document.createElement('span'); state.className = 'state'; state.textContent = item.completed ? 'Concluído' : (item.unlocked ? 'Disponível' : 'Bloqueado'); var title = document.createElement('div'); title.className = 'scenario-title'; title.textContent = item.title || item.scenarioId; var meta = document.createElement('small'); meta.textContent = 'Dificuldade: ' + (item.difficulty || '—'); row.appendChild(state); row.appendChild(title); row.appendChild(meta); host.appendChild(row); }); if (!host.children.length) host.innerHTML = '<li class="muted">Nenhum cenário ativo.</li>';
+      if (data.nextScenario && data.nextScenario.ScenarioID) { document.getElementById('nextCard').hidden = false; document.getElementById('nextScenario').textContent = data.nextScenario.Title || 'Novo cenário disponível'; document.getElementById('continueButton').onclick = function() { window.location.href = '?page=scenario_play&scenarioId=' + encodeURIComponent(data.nextScenario.ScenarioID) + '&token=' + encodeURIComponent(authToken); }; }
+      document.getElementById('status').textContent = 'Progressão atualizada.';
+    }
+    loadProgression().then(render).catch(function(error) { document.getElementById('status').textContent = error.message; document.getElementById('status').className = 'status error'; });
+  </script>
+</body>
+</html>

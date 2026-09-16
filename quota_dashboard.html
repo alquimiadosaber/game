@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Quotas e capacidade</title>
+  <style>
+    :root { color-scheme:dark; font-family:Inter,system-ui,sans-serif; --bg:#100b1b; --surface:#1c1430; --text:#f6f0ff; --muted:#c9bddb; --accent:#a78bfa; --border:#493865; --ok:#2dd4a0; --warning:#fbbf24; --danger:#fb7185; }
+    * { box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); margin:0; min-width:320px; }
+    main { margin:auto; max-width:980px; padding:24px; }
+    a { color:var(--accent); }
+    .toolbar { align-items:center; display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; }
+    .grid { display:grid; gap:16px; grid-template-columns:repeat(3,minmax(0,1fr)); margin:20px 0; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; }
+    .metric { font-size:2rem; font-weight:850; margin:8px 0; }
+    .muted { color:var(--muted); }
+    .progress { background:#332647; border-radius:999px; height:12px; overflow:hidden; }
+    .progress span { background:var(--ok); display:block; height:100%; width:0; }
+    .progress span.warning { background:var(--warning); }
+    .progress span.danger { background:var(--danger); }
+    button { background:#151020; border:1px solid var(--border); border-radius:10px; color:var(--text); font:inherit; min-height:48px; padding:10px 14px; }
+    button.primary { background:var(--accent); color:#160d27; font-weight:800; }
+    button.danger { border-color:var(--danger); color:#ffd9df; }
+    ul { padding-left:22px; }
+    @media (max-width:720px) { main{padding:16px}.grid{grid-template-columns:1fr}.toolbar{align-items:stretch;flex-direction:column}.toolbar button{width:100%} }
+  </style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 48px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+</head>
+<body>
+  <main>
+    <a id="backLink" target="_top" href="?page=admin_dashboard">← Voltar à administração</a>
+    <div class="toolbar">
+      <div><h1>Quotas e capacidade</h1><p class="muted">Estimativas locais do Apps Script; confirme limites no console do Google.</p></div>
+      <button id="refresh" class="primary" type="button">Atualizar</button>
+    </div>
+
+    <div class="grid">
+      <section class="card" aria-labelledby="quotaTitle">
+        <h2 id="quotaTitle">Tempo diário</h2>
+        <p id="quotaMinutes" class="metric">—</p>
+        <div class="progress" aria-hidden="true"><span id="quotaBar"></span></div>
+        <p id="quotaDetail" class="muted">Aguardando dados.</p>
+      </section>
+      <section class="card" aria-labelledby="triggerTitle">
+        <h2 id="triggerTitle">Gatilhos ativos</h2>
+        <p id="triggerCount" class="metric">—</p>
+        <p id="triggerDetail" class="muted">Aguardando dados.</p>
+      </section>
+      <section class="card" aria-labelledby="cacheTitle">
+        <h2 id="cacheTitle">Cache persistente</h2>
+        <p id="cacheCount" class="metric">—</p>
+        <p id="cacheDetail" class="muted">Aguardando dados.</p>
+      </section>
+    </div>
+
+    <section class="card" aria-labelledby="triggerListTitle">
+      <h2 id="triggerListTitle">Agenda instalada</h2>
+      <ul id="triggerList"><li class="muted">Carregando…</li></ul>
+    </section>
+
+    <section class="card" aria-labelledby="maintenanceTitle">
+      <h2 id="maintenanceTitle">Manutenção segura</h2>
+      <p>Remove somente sessões expiradas, logs além da retenção e cache vencido. Dados pedagógicos e contas não são apagados.</p>
+      <button id="cleanup" class="danger" type="button">Executar limpeza agora</button>
+    </section>
+    <p id="quotaStatus" role="status" aria-live="polite">Carregando diagnóstico…</p>
+  </main>
+  <script>
+  (function () {
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var status = document.getElementById('quotaStatus');
+    var busy = false;
+
+    function text(id, value) { document.getElementById(id).textContent = String(value); }
+    function render(result) {
+      busy = false;
+      if (!result || !result.success) { status.textContent = result && result.error ? result.error : 'Diagnóstico indisponível.'; return; }
+      var quota = result.data.quota || {};
+      var cache = result.data.cache || {};
+      var triggers = Array.isArray(result.data.triggers) ? result.data.triggers : [];
+      var usage = Math.max(0, Math.min(100, Number(quota.quotaUsagePercentage || 0)));
+      text('quotaMinutes', Number(quota.estimatedDailyMinutes || 0) + ' min');
+      text('quotaDetail', usage + '% da estimativa de ' + Number(quota.dailyQuotaMinutes || 90) + ' min/dia.');
+      var bar = document.getElementById('quotaBar');
+      bar.style.width = usage + '%';
+      bar.className = usage >= 90 ? 'danger' : usage >= 75 ? 'warning' : '';
+      text('triggerCount', quota.activeTriggers !== undefined ? quota.activeTriggers : triggers.length);
+      text('triggerDetail', 'Limite configurado: ' + Number(quota.maxTriggers || 0) + '.');
+      text('cacheCount', Number(cache.activeItems || 0) + ' ativos');
+      text('cacheDetail', Number(cache.expiredItems || 0) + ' expirados · ' + Number(cache.totalSize || 0) + ' bytes.');
+      var list = document.getElementById('triggerList');
+      list.replaceChildren();
+      if (!triggers.length) {
+        var empty = document.createElement('li'); empty.className = 'muted'; empty.textContent = 'Nenhum gatilho instalado.'; list.appendChild(empty);
+      } else {
+        triggers.forEach(function (item) {
+          var li = document.createElement('li');
+          li.textContent = String(item.handlerFunction || item.functionName || item.name || 'Gatilho') + ' — ' + String(item.eventType || item.type || 'agendado');
+          list.appendChild(li);
+        });
+      }
+      status.textContent = quota.warning || 'Diagnóstico atualizado.';
+    }
+    function load() {
+      if (busy) return;
+      if (!authToken || !window.google || !google.script || !google.script.run) { status.textContent = 'Sessão administrativa ou conexão indisponível.'; return; }
+      busy = true; status.textContent = 'Atualizando diagnóstico…';
+      google.script.run.withSuccessHandler(render).withFailureHandler(function () { busy = false; status.textContent = 'Falha de comunicação ao atualizar.'; }).api_getQuotaDashboard(authToken);
+    }
+
+    document.getElementById('backLink').href = '?page=admin_dashboard&token=' + encodeURIComponent(authToken);
+    document.getElementById('refresh').addEventListener('click', load);
+    document.getElementById('cleanup').addEventListener('click', function () {
+      if (busy || !window.confirm('Executar a limpeza de dados expirados agora?')) return;
+      if (!authToken || !window.google || !google.script || !google.script.run) { status.textContent = 'Sessão administrativa ou conexão indisponível.'; return; }
+      busy = true; status.textContent = 'Executando manutenção…';
+      google.script.run
+        .withSuccessHandler(function (result) { busy = false; status.textContent = result && result.success ? 'Manutenção concluída. Atualizando diagnóstico…' : (result && result.error) || 'A manutenção falhou.'; if (result && result.success) load(); })
+        .withFailureHandler(function () { busy = false; status.textContent = 'Falha de comunicação durante a manutenção.'; })
+        .api_runFullMaintenance(authToken);
+    });
+    load();
+  }());
+  </script>
+</body>
+</html>

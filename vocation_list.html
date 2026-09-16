@@ -1,0 +1,427 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — vocation_list.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Catálogo exploratório de áreas do conhecimento como uma estante de tubos
+ *   de ensaio: cada tema é um card com um mini-tubo cujas camadas coloridas
+ *   representam a fórmula epistémica (ex.: 2/4 rosa IA + 1/4 azul FIL +
+ *   1/4 laranja PSI). Filtro por domínio (A–F) e busca por texto.
+ *
+ * INTEGRAÇÕES (google.script.run — bridge global api_*):
+ *   • api_getAllVocations() — catálogo completo { success, data: [ {
+ *     VocationID, Title, Domain, Formula, Description } ] }, onde Formula
+ *     segue o formato "IA:2,FIL:1,PSI:1".
+ *   Enquanto o backend não existir, a página exibe um catálogo demo de 12
+ *   vocações representativas (2 por domínio, extraídas do Relatorio.md).
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Todo texto vindo do servidor é inserido via textContent (nunca innerHTML)
+ *   — proteção XSS no cliente além do escaping server-side.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.1.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Áreas para explorar</title>
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.06);
+      --text: #f3eeff; --muted: #b7a8e0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1100px 650px at 20% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 28px 20px;
+    }
+    header { max-width: 1080px; margin: 0 auto 20px; text-align: center; }
+    header h1 { font-size: clamp(1.6rem, 4vw, 2.3rem); }
+    header p { color: var(--muted); margin-top: 6px; }
+
+    /* Filtros */
+    .toolbar {
+      max-width: 1080px; margin: 0 auto 26px; display: flex; gap: 12px;
+      flex-wrap: wrap; justify-content: center; align-items: center;
+    }
+    #search {
+      padding: 12px 18px; border-radius: 999px; min-width: 250px; font-size: .95rem;
+      border: 2px solid rgba(255,255,255,.18); background: rgba(0,0,0,.25);
+      color: var(--text); outline: none;
+    }
+    #search:focus { border-color: var(--fil); }
+    .domain-btn {
+      padding: 8px 16px; border-radius: 999px; border: 2px solid rgba(255,255,255,.2);
+      background: transparent; color: var(--muted); font-weight: 700; font-size: .85rem;
+      cursor: pointer; transition: all .15s;
+    }
+    .domain-btn:hover { transform: scale(1.06); }
+    .domain-btn.active { color: #fff; border-color: var(--neu);
+      background: rgba(139,92,246,.35); box-shadow: 0 0 14px rgba(139,92,246,.35); }
+
+    /* Estante de tubos */
+    .shelf {
+      max-width: 1080px; margin: 0 auto; display: grid; gap: 18px;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+    .voc-card {
+      background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px; padding: 18px; display: flex; gap: 16px;
+      transition: transform .18s, box-shadow .18s; cursor: pointer;
+    }
+    .voc-card:hover { transform: translateY(-4px); box-shadow: 0 14px 34px rgba(0,0,0,.45); }
+    .voc-card:hover .mini-tube { transform: rotate(3deg); }
+
+    .mini-tube {
+      flex: 0 0 44px; height: 130px; position: relative; align-self: center;
+      border: 2.5px solid rgba(255,255,255,.35); border-top-width: 0;
+      border-radius: 0 0 22px 22px; background: rgba(255,255,255,.04);
+      display: flex; flex-direction: column-reverse; overflow: hidden;
+      transition: transform .18s;
+    }
+    .mini-tube::before {
+      content: ""; position: absolute; top: 0; left: -6px; right: -6px; height: 7px;
+      border: 2.5px solid rgba(255,255,255,.35); border-radius: 6px; z-index: 3;
+    }
+    .mini-tube::after {
+      content: ""; position: absolute; top: 8%; left: 16%; width: 6px; height: 78%;
+      background: linear-gradient(rgba(255,255,255,.5), transparent); border-radius: 6px; z-index: 3;
+    }
+    .mini-tube .layer { width: 100%; position: relative; }
+    .mini-tube .surface {
+      position: absolute; top: -2px; left: 0; right: 0; height: 4px;
+      background: rgba(255,255,255,.3); border-radius: 50%; filter: blur(1px);
+    }
+
+    .voc-info { flex: 1; min-width: 0; }
+    .voc-domain {
+      display: inline-block; font-size: .7rem; font-weight: 800; letter-spacing: .8px;
+      padding: 3px 10px; border-radius: 999px; text-transform: uppercase;
+      background: rgba(255,255,255,.1); color: var(--muted); margin-bottom: 8px;
+    }
+    .voc-title { font-size: .98rem; line-height: 1.3; margin-bottom: 8px; }
+    .voc-formula { font-size: .8rem; font-weight: 800; display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill { padding: 2px 9px; border-radius: 999px; color: #1a1033; }
+    .voc-desc { margin-top: 8px; color: var(--muted); font-size: .82rem; line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    #empty { text-align: center; color: var(--muted); padding: 60px 20px; display: none; }
+    #count { text-align: center; color: var(--muted); font-size: .85rem; margin-bottom: 14px; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧪 Estante de áreas para explorar</h1>
+    <p>Cada tubo combina áreas do conhecimento. Explore por curiosidade: nenhum cartão define sua inteligência, personalidade ou futura profissão.</p>
+  </header>
+
+  <div class="toolbar">
+    <input inputmode="search" type="search" id="search" placeholder="Buscar um tema… (ex.: cérebro, arte, espaço)">
+    <button class="domain-btn active" data-domain="ALL">Todos</button>
+    <button class="domain-btn" data-domain="A">A · Mente</button>
+    <button class="domain-btn" data-domain="B">B · Vida</button>
+    <button class="domain-btn" data-domain="C">C · Sociedade</button>
+    <button class="domain-btn" data-domain="D">D · Arte</button>
+    <button class="domain-btn" data-domain="E">E · Fronteira</button>
+    <button class="domain-btn" data-domain="F">F · Saúde</button>
+  </div>
+
+  <div id="count"></div>
+  <main class="shelf" id="shelf"></main>
+  <div id="empty">Nenhum tubo com esse rótulo na estante… 🧐 Tente outra busca!</div>
+
+  <script>
+    var DIMENSIONS = {
+      IA:  { name: 'Inteligência Artificial', varName: '--ia'  },
+      FIL: { name: 'Filosofia',               varName: '--fil' },
+      PSI: { name: 'Psicometria',             varName: '--psi' },
+      NEU: { name: 'Neurociência',            varName: '--neu' },
+      BIO: { name: 'Biologia',                varName: '--bio' },
+      FIS: { name: 'Física',                  varName: '--fis' },
+      SOC: { name: 'Sociologia',              varName: '--soc' },
+      ART: { name: 'Artes',                   varName: '--art' }
+    };
+
+    // Amostra demo (2 por domínio, do Relatorio.md). O catálogo completo de
+    // 60 virá de api_getAllVocations() quando VocationController existir.
+    var DEMO_VOCATIONS = [
+      { VocationID: 'A01', Domain: 'A', Formula: 'IA:2,FIL:1,PSI:1',
+        Title: 'Psicologia Fenomenológica Existencial Mediada por IA',
+        Description: 'Decodifica a experiência subjetiva humana com biossensores de IA e lentes fenomenológicas.' },
+      { VocationID: 'A03', Domain: 'A', Formula: 'IA:2,PSI:2',
+        Title: 'Psicometria Sintética de Agentes Autônomos (LLMs)',
+        Description: 'Avalia e calibra traços de "personalidade" de modelos de linguagem para segurança comportamental.' },
+      { VocationID: 'B01', Domain: 'B', Formula: 'BIO:2,FIS:1,IA:1',
+        Title: 'Bioinformática Quântica Aplicada',
+        Description: 'Simulação quântica do dobramento de proteínas e reações bioquímicas em alta velocidade.' },
+      { VocationID: 'B06', Domain: 'B', Formula: 'BIO:2,IA:2',
+        Title: 'Evolução Dirigida Digitalmente por Aprendizado Profundo',
+        Description: 'Acelera mutações benéficas de enzimas com modelos generativos guiando a seleção in vitro.' },
+      { VocationID: 'C08', Domain: 'C', Formula: 'PSI:2,IA:2',
+        Title: 'Psicometria das Emoções Coletivas em Ambientes Digitais',
+        Description: 'Analisa em tempo real o clima emocional de populações para prevenir crises de saúde mental.' },
+      { VocationID: 'C02', Domain: 'C', Formula: 'SOC:2,IA:1,FIL:1',
+        Title: 'Socio-criminologia Algorítmica de Precisão',
+        Description: 'Avalia vieses geográficos e raciais em modelos preditivos de segurança pública.' },
+      { VocationID: 'D01', Domain: 'D', Formula: 'ART:2,NEU:1,IA:1',
+        Title: 'Design de Experiência Estética Neuro-Direcionada',
+        Description: 'Arte digital que reage às ondas cerebrais do espectador captadas por biossensores.' },
+      { VocationID: 'D10', Domain: 'D', Formula: 'FIL:2,ART:2',
+        Title: 'Estética do Erro de Máquina (Glitch Art Epistêmica)',
+        Description: 'Usa falhas e alucinações de IAs generativas como crítica artística à objetividade algorítmica.' },
+      { VocationID: 'E04', Domain: 'E', Formula: 'FIS:2,IA:2',
+        Title: 'Cosmologia Computacional e Mineração de Dados Astrofísicos',
+        Description: 'IA generativa explorando catálogos de telescópios para decodificar a matéria escura.' },
+      { VocationID: 'E01', Domain: 'E', Formula: 'FIS:2,NEU:1,IA:1',
+        Title: 'Computação Cognitiva Neuromórfica',
+        Description: 'Microchips com memristores que imitam neurônios biológicos de verdade.' },
+      { VocationID: 'F03', Domain: 'F', Formula: 'PSI:2,ART:1,IA:1',
+        Title: 'Avaliação Cognitiva Baseada em Jogos Sérios Inteligentes',
+        Description: 'Investiga como jogos podem apoiar a aprendizagem. Diagnósticos só podem ser feitos por profissionais habilitados.' },
+      { VocationID: 'F08', Domain: 'F', Formula: 'ART:2,PSI:1,NEU:1',
+        Title: 'Design Psicoacústico de Silêncio e Redução de Ansiedade',
+        Description: 'Ambientes sonoros que acalmam a hiperestimulação de pessoas com TEA.' }
+    ];
+
+    var allVocations = [];
+    var activeDomain = 'ALL';
+    var query = '';
+
+    function parseFormula(formula) {
+      return String(formula || '').split(',').map(function (part) {
+        var bits = part.split(':');
+        return { dim: bits[0].trim().toUpperCase(), q: parseInt(bits[1], 10) || 0 };
+      }).filter(function (p) { return DIMENSIONS[p.dim] && p.q > 0; });
+    }
+
+    function buildMiniTube(parts) {
+      var tube = document.createElement('div');
+      tube.className = 'mini-tube';
+      parts.forEach(function (part, i) {
+        var layer = document.createElement('div');
+        layer.className = 'layer';
+        layer.style.height = (part.q * 22) + '%';
+        layer.style.background =
+          'linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), var(' + DIMENSIONS[part.dim].varName + ')';
+        layer.title = part.q + '/4 ' + DIMENSIONS[part.dim].name;
+        if (i > 0) {
+          var surface = document.createElement('div');
+          surface.className = 'surface';
+          layer.appendChild(surface);
+        }
+        tube.appendChild(layer);
+      });
+      return tube;
+    }
+
+    function buildCard(voc) {
+      var parts = parseFormula(voc.Formula);
+      var card = document.createElement('article');
+      card.className = 'voc-card';
+      card.setAttribute('data-domain', voc.Domain);
+
+      card.appendChild(buildMiniTube(parts));
+
+      var info = document.createElement('div');
+      info.className = 'voc-info';
+
+      var domain = document.createElement('span');
+      domain.className = 'voc-domain';
+      domain.textContent = 'Domínio ' + voc.Domain;
+      info.appendChild(domain);
+
+      var title = document.createElement('h3');
+      title.className = 'voc-title';
+      title.textContent = voc.Title;
+      info.appendChild(title);
+
+      var formula = document.createElement('div');
+      formula.className = 'voc-formula';
+      parts.forEach(function (part) {
+        var pill = document.createElement('span');
+        pill.className = 'pill';
+        pill.style.background = 'var(' + DIMENSIONS[part.dim].varName + ')';
+        pill.textContent = part.q + '/4 ' + part.dim;
+        formula.appendChild(pill);
+      });
+      info.appendChild(formula);
+
+      var desc = document.createElement('p');
+      desc.className = 'voc-desc';
+      desc.textContent = voc.Description || '';
+      info.appendChild(desc);
+
+      card.appendChild(info);
+      card.addEventListener('click', function () {
+        window.top.location.href = '?page=vocation_detail&id=' + encodeURIComponent(voc.VocationID);
+      });
+      return card;
+    }
+
+    function render() {
+      var shelf = document.getElementById('shelf');
+      shelf.innerHTML = '';
+      var q = query.toLowerCase();
+      var visible = allVocations.filter(function (voc) {
+        var matchDomain = activeDomain === 'ALL' || voc.Domain === activeDomain;
+        var matchText = !q || (voc.Title + ' ' + (voc.Description || '')).toLowerCase().indexOf(q) !== -1;
+        return matchDomain && matchText;
+      });
+      visible.forEach(function (voc) { shelf.appendChild(buildCard(voc)); });
+      document.getElementById('empty').style.display = visible.length ? 'none' : 'block';
+      document.getElementById('count').textContent =
+        visible.length + ' de ' + allVocations.length + ' temas na estante';
+    }
+
+    document.getElementById('search').addEventListener('input', function (ev) {
+      query = ev.target.value.trim();
+      render();
+    });
+    document.querySelectorAll('.domain-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.domain-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        activeDomain = btn.getAttribute('data-domain');
+        render();
+      });
+    });
+
+    function loadVocations() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (result) {
+            allVocations = (result && result.success && result.data && result.data.length)
+              ? result.data : DEMO_VOCATIONS;
+            render();
+          })
+          .withFailureHandler(function () { allVocations = DEMO_VOCATIONS; render(); })
+          .api_getAllVocations();
+      } else {
+        allVocations = DEMO_VOCATIONS;
+        render();
+      }
+    }
+
+    // Pré-seleciona o domínio vindo de domain_map.html (?page=vocation_list&domain=X).
+    (function applyDomainFromUrl() {
+      var params;
+      try {
+        params = new URLSearchParams(window.top.location.search);
+      } catch (err) {
+        params = new URLSearchParams(window.location.search);
+      }
+      var domain = (params.get('domain') || '').toUpperCase();
+      var btn = domain && document.querySelector('.domain-btn[data-domain="' + domain + '"]');
+      if (btn) {
+        document.querySelectorAll('.domain-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        activeDomain = domain;
+      }
+    })();
+
+    loadVocations();
+  </script>
+</body>
+</html>

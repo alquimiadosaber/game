@@ -1,0 +1,440 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — register.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Formulário de registro. Segue a metáfora do tubo de ensaio que "enche"
+ *   conforme os campos são preenchidos (nome=azul FIL, e-mail=ciano SOC), e
+ *   a camada de senha muda de cor conforme a força (fraca=coral, média=
+ *   laranja, forte=verde) — feedback lúdico de força de senha sem barra de
+ *   progresso tradicional. Um selo brilha no topo do tubo quando as duas
+ *   senhas coincidem.
+ *
+ * INTEGRAÇÕES (google.script.run — bridge global api_*):
+ *   • api_register(payload) — { fullName, email, password }. Degrada para
+ *     modo demo (sem persistência) quando google.script.run não existe.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Confirmação de senha e aceite de termos são obrigatórios antes de
+ *   habilitar o envio (validação client-side; o servidor deve revalidar).
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.1.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Criar conta</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.07);
+      --text: #f3eeff; --muted: #b7a8e0; --danger: #ff6b6b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1000px 600px at 70% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .panel {
+      display: flex; gap: 40px; align-items: center; flex-wrap: wrap-reverse; justify-content: center;
+      background: var(--card); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 28px; padding: 40px; max-width: 760px; width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+    .tube-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .tube {
+      position: relative; width: 68px; height: 220px;
+      border: 3px solid rgba(255,255,255,.35); border-top-width: 0;
+      border-radius: 0 0 34px 34px; background: rgba(255,255,255,.04);
+      display: flex; flex-direction: column-reverse; overflow: hidden;
+      box-shadow: inset 0 0 16px rgba(255,255,255,.08); transition: box-shadow .3s;
+    }
+    .tube.matched { box-shadow: inset 0 0 16px rgba(255,255,255,.08), 0 0 22px rgba(45,212,160,.55); }
+    .tube::before {
+      content: ""; position: absolute; top: 0; left: -8px; right: -8px; height: 10px;
+      border: 3px solid rgba(255,255,255,.35); border-radius: 8px; z-index: 3;
+    }
+    .tube::after {
+      content: ""; position: absolute; top: 6%; left: 14%; width: 10px; height: 80%;
+      background: linear-gradient(rgba(255,255,255,.5), transparent); border-radius: 8px; z-index: 3;
+    }
+    .layer { width: 100%; height: 0; transition: height .5s cubic-bezier(.34,1.56,.64,1), background .3s; position: relative; }
+    #layer-name  { background: linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), var(--fil); }
+    #layer-email { background: linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), var(--soc); }
+    #layer-pass  { background: linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), var(--art); }
+    .layer .surface { position: absolute; top: -3px; left: 0; right: 0; height: 6px;
+      background: rgba(255,255,255,.28); border-radius: 50%; filter: blur(1px); }
+    .seal {
+      font-size: 1.6rem; opacity: 0; transform: scale(.5); transition: all .3s;
+    }
+    .seal.on { opacity: 1; transform: scale(1); }
+    .tube-hint { color: var(--muted); font-size: .8rem; text-align: center; max-width: 140px; }
+
+    form { flex: 1; min-width: 260px; }
+    h1 { font-size: 1.5rem; margin-bottom: 4px; }
+    .sub { color: var(--muted); margin-bottom: 20px; font-size: .93rem; }
+    label { display: block; font-weight: 600; font-size: .88rem; margin: 12px 0 6px; }
+    input[type=text], input[type=email], input[type=password] {
+      width: 100%; padding: 12px 15px; border-radius: 14px; font-size: .96rem;
+      border: 2px solid rgba(255,255,255,.18); background: rgba(0,0,0,.25); color: var(--text);
+      outline: none; transition: border-color .2s, box-shadow .2s;
+    }
+    .password-field { position: relative; }
+    .password-field input { padding-right: 56px; }
+    button.password-toggle {
+      position: absolute; top: 50%; right: 8px;
+      display: grid; place-items: center;
+      width: 38px; height: 38px; min-height: 38px;
+      margin: 0; padding: 0; transform: translateY(-50%);
+      border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
+      background: rgba(255,255,255,.08); box-shadow: none;
+      color: var(--text);
+    }
+    button.password-toggle .material-icons { font-size: 20px; line-height: 1; }
+    button.password-toggle:hover:not(:disabled) { transform: translateY(-50%); background: rgba(255,255,255,.14); }
+    #fullName:focus { border-color: var(--fil); box-shadow: 0 0 0 4px rgba(76,201,240,.18); }
+    #email:focus { border-color: var(--soc); box-shadow: 0 0 0 4px rgba(0,194,199,.18); }
+    #password:focus, #confirmPassword:focus { border-color: var(--art); box-shadow: 0 0 0 4px rgba(255,107,107,.18); }
+    .strength-label { font-size: .78rem; margin-top: 5px; font-weight: 700; }
+    .terms { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; font-size: .85rem; color: var(--muted); }
+    .terms input { margin-top: 3px; }
+    button {
+      width: 100%; margin-top: 18px; padding: 14px; border: 0; border-radius: 999px;
+      font-size: 1.02rem; font-weight: 800; color: #fff; cursor: pointer;
+      background: linear-gradient(90deg, var(--ia), #c13cff);
+      box-shadow: 0 6px 24px rgba(255,77,141,.4); transition: transform .15s, opacity .15s;
+    }
+    button:hover:not(:disabled) { transform: translateY(-2px); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .links { margin-top: 16px; text-align: center; font-size: .88rem; }
+    .links a { color: var(--fil); text-decoration: none; }
+    .links a:hover { text-decoration: underline; }
+    button:focus-visible, .links a:focus-visible {
+      outline: 3px solid rgba(76,201,240,.45); outline-offset: 3px;
+    }
+    .msg { margin-top: 14px; padding: 12px 14px; border-radius: 12px; font-size: .88rem; display: none; }
+    .msg.error { display: block; background: rgba(255,107,107,.14); border: 1px solid var(--danger); color: #ffc9c9; }
+    .msg.info  { display: block; background: rgba(76,201,240,.12); border: 1px solid var(--fil); color: #cdefff; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="tube-wrap" aria-hidden="true">
+      <div class="seal" id="seal">✅</div>
+      <div class="tube" id="tube">
+        <div class="layer" id="layer-name"></div>
+        <div class="layer" id="layer-email"><div class="surface"></div></div>
+        <div class="layer" id="layer-pass"><div class="surface"></div></div>
+      </div>
+      <div class="tube-hint" id="tube-hint">Preencha os frascos para abrir seu laboratório 🧪</div>
+    </div>
+
+    <form id="register-form" autocomplete="on">
+      <h1>Monte seu laboratório! ⚗️</h1>
+      <p class="sub">Crie sua conta de alquimista em segundos.</p>
+
+      <label for="fullName">Nome completo</label>
+      <input inputmode="text" type="text" id="fullName" name="fullName" required minlength="3" maxlength="120"
+             autocomplete="name" enterkeyhint="next" placeholder="Seu nome" autofocus>
+
+      <label for="email">E-mail</label>
+      <input type="email" id="email" name="email" required maxlength="254"
+             autocomplete="email" inputmode="email" autocapitalize="none"
+             autocorrect="off" spellcheck="false" enterkeyhint="next"
+             placeholder="voce@escola.br">
+
+      <label for="password">Senha</label>
+      <div class="password-field">
+        <input inputmode="text" type="password" id="password" name="password" required minlength="8" maxlength="128"
+               autocomplete="new-password" enterkeyhint="next" aria-describedby="strength-label"
+               placeholder="mín. 8 caracteres">
+        <button class="password-toggle" type="button" data-password-toggle="password"
+                aria-controls="password" aria-pressed="false" aria-label="Mostrar senha"
+          ><i class="material-icons" aria-hidden="true">visibility</i></button>
+      </div>
+      <div class="strength-label" id="strength-label" role="status" aria-live="polite"></div>
+
+      <label for="confirmPassword">Confirmar senha</label>
+      <div class="password-field">
+        <input inputmode="text" type="password" id="confirmPassword" name="confirmPassword" required minlength="8" maxlength="128"
+               autocomplete="new-password" enterkeyhint="go" placeholder="repita a senha">
+        <button class="password-toggle" type="button" data-password-toggle="confirmPassword"
+                aria-controls="confirmPassword" aria-pressed="false" aria-label="Mostrar confirmação da senha"
+          ><i class="material-icons" aria-hidden="true">visibility</i></button>
+      </div>
+
+      <label class="terms">
+        <input type="checkbox" id="terms" required>
+        <span>Li e aceito os termos de uso e a política de privacidade do laboratório.</span>
+      </label>
+
+      <button type="submit" id="submit-btn" disabled>Criar minha conta</button>
+      <div class="msg" id="feedback" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+      <p class="links"><a href="<?!= getScriptUrl() ?>?page=login" target="_top">Já tenho conta — entrar</a></p>
+    </form>
+  </div>
+
+  <script>
+    var els = {
+      name: document.getElementById('fullName'),
+      email: document.getElementById('email'),
+      pass: document.getElementById('password'),
+      confirm: document.getElementById('confirmPassword'),
+      terms: document.getElementById('terms')
+    };
+    var feedback = document.getElementById('feedback');
+    var submitBtn = document.getElementById('submit-btn');
+    var registerForm = document.getElementById('register-form');
+
+    document.querySelectorAll('[data-password-toggle]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var input = document.getElementById(this.getAttribute('data-password-toggle'));
+        var showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        var icon = this.querySelector('.material-icons');
+        if (icon) icon.textContent = showing ? 'visibility' : 'visibility_off';
+        else this.textContent = showing ? 'Mostrar' : 'Ocultar';
+        this.setAttribute('aria-pressed', showing ? 'false' : 'true');
+        this.setAttribute('aria-label', (showing ? 'Mostrar ' : 'Ocultar ') +
+          (input.id === 'confirmPassword' ? 'confirmação da senha' : 'senha'));
+        input.focus();
+      });
+    });
+
+    function setSubmitting(submitting) {
+      if (submitting) submitBtn.disabled = true;
+      else updateTube();
+      submitBtn.setAttribute('aria-busy', submitting ? 'true' : 'false');
+      registerForm.setAttribute('aria-busy', submitting ? 'true' : 'false');
+    }
+
+    function passwordStrength(pwd) {
+      if (!pwd) return 0;
+      var score = 0;
+      if (pwd.length >= 8) score++;
+      if (pwd.length >= 12) score++;
+      if (/[0-9]/.test(pwd) && /[a-zA-Z]/.test(pwd)) score++;
+      if (/[^a-zA-Z0-9]/.test(pwd)) score++;
+      return Math.min(score, 3); // 0=vazio/fraco, 1=fraco, 2=médio, 3=forte
+    }
+
+    var STRENGTH_META = [
+      { color: 'var(--art)', label: '', height: '0' },
+      { color: 'var(--art)', label: 'Senha fraca — tente misturar letras e números 🧪', height: '30%' },
+      { color: 'var(--psi)', label: 'Senha média — quase lá! ✨', height: '55%' },
+      { color: 'var(--bio)', label: 'Senha forte — poção estável! 💪', height: '80%' }
+    ];
+
+    function updateTube() {
+      var nameOk = els.name.value.trim().length >= 3;
+      var emailOk = els.email.validity.valid && els.email.value.length > 3;
+      var strength = passwordStrength(els.pass.value);
+      var matched = els.pass.value.length >= 8 && els.pass.value === els.confirm.value;
+
+      document.getElementById('layer-name').style.height = nameOk ? '30%' : (els.name.value ? '12%' : '0');
+      document.getElementById('layer-email').style.height = emailOk ? '30%' : (els.email.value ? '12%' : '0');
+
+      var meta = STRENGTH_META[strength];
+      var passLayer = document.getElementById('layer-pass');
+      passLayer.style.height = meta.height;
+      passLayer.style.background = 'linear-gradient(rgba(255,255,255,.18), rgba(0,0,0,.12)), ' + meta.color;
+      document.getElementById('strength-label').textContent = meta.label;
+      document.getElementById('strength-label').style.color = meta.color.replace('var(', '').replace(')', '') === '--bio' ? '#2dd4a0' : '';
+
+      document.getElementById('seal').classList.toggle('on', matched);
+      document.getElementById('tube').classList.toggle('matched', matched);
+      document.getElementById('tube-hint').textContent =
+        matched ? 'Poção pronta — laboratório liberado! ✨' : 'Preencha os frascos para abrir seu laboratório 🧪';
+
+      submitBtn.disabled = !(nameOk && emailOk && strength >= 1 && matched && els.terms.checked);
+    }
+
+    Object.keys(els).forEach(function (key) {
+      var eventName = els[key].type === 'checkbox' ? 'change' : 'input';
+      els[key].addEventListener(eventName, updateTube);
+    });
+
+    function showMessage(kind, text) {
+      feedback.className = 'msg ' + kind;
+      feedback.textContent = text;
+    }
+
+    function resolveBaseUrl() {
+      var scriptUrl = '<?= getScriptUrl() ?>';
+      if (scriptUrl && scriptUrl.indexOf('http') === 0) {
+        return scriptUrl;
+      }
+      try {
+        var current = String(window.location.href || '');
+        if (current.indexOf('http') === 0) {
+          return current.split('?')[0];
+        }
+      } catch (e) {}
+      return '';
+    }
+
+    function onRegisterResult(result) {
+      if (result && result.success) {
+        var base = resolveBaseUrl();
+        var targetUrl = (base ? base : '') + '?page=login';
+        feedback.className = 'msg info';
+        feedback.innerHTML = '';
+        var msgText = document.createElement('div');
+        msgText.textContent = 'Conta criada com sucesso! Redirecionando para o login…';
+        var loginLink = document.createElement('a');
+        loginLink.href = targetUrl;
+        loginLink.target = '_top';
+        loginLink.style.cssText = 'display:inline-block;margin-top:10px;padding:8px 18px;background:var(--fil,#4cc9f0);color:#160f2e;font-weight:800;border-radius:999px;text-decoration:none;cursor:pointer;';
+        loginLink.textContent = 'Ir para tela de login ➔';
+        feedback.appendChild(msgText);
+        feedback.appendChild(loginLink);
+
+        try {
+          if (window.top && window.top !== window.self) {
+            window.top.location.href = targetUrl;
+          } else {
+            window.location.href = targetUrl;
+          }
+        } catch (navErr) {
+          try { window.location.href = targetUrl; } catch (innerErr) {}
+        }
+
+        setTimeout(function () {
+          try { loginLink.click(); } catch (clickErr) {}
+        }, 300);
+      } else {
+        setSubmitting(false);
+        showMessage('error', (result && result.error) || 'Não foi possível criar a conta.');
+      }
+    }
+
+    function onRegisterFailure(err) {
+      setSubmitting(false);
+      showMessage('error', 'Falha ao comunicar com o servidor: ' + (err && err.message ? err.message : err));
+    }
+
+    registerForm.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      setSubmitting(true);
+      showMessage('info', 'Selando o frasco…');
+      var payload = { fullName: els.name.value.trim(), email: els.email.value.trim(), password: els.pass.value };
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(onRegisterResult).withFailureHandler(onRegisterFailure).api_register(payload);
+      } else {
+        setTimeout(function () {
+          setSubmitting(false);
+          showMessage('info', 'Modo demonstração — backend de registro ainda não conectado.');
+        }, 700);
+      }
+    });
+  </script>
+</body>
+</html>

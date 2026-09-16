@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Cenários</title>
+  <style>
+    :root { color-scheme: dark; --bg:#151126; --panel:#211a38; --line:#51456e; --text:#f4efff; --muted:#c2b8d8; --accent:#7dd3fc; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
+    main { max-width:960px; margin:auto; padding:32px 20px 64px; }
+    header { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+    h1,h2,p { margin-top:0; }
+    .muted,.meta { color:var(--muted); }
+    .progress { border:1px solid var(--line); padding:12px 16px; border-radius:10px; min-width:180px; }
+    .filters { display:flex; gap:12px; margin:24px 0; flex-wrap:wrap; }
+    .start-hint { margin: -10px 0 20px; padding: 10px 14px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: rgba(125,211,252,.08); color: var(--muted); font-size: .9rem; }
+    .start-hint strong { color: var(--text); }
+    select,button,a.button { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 13px; }
+    button,a.button { cursor:pointer; text-decoration:none; }
+    button:hover,a.button:hover { border-color:var(--accent); }
+    #grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; }
+    article { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; }
+    article.done { border-color:#34d399; }
+    .status { font-weight:700; color:var(--accent); }
+    .empty,.error { padding:20px; border:1px solid var(--line); border-radius:10px; }
+    .error { border-color:#fb7185; color:#fecdd3; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><p class="muted">Etapa 2 de 4</p><h1>Escolha um cenário</h1><p class="muted">Leia um dilema e prepare uma resposta em quatro partes.</p></div>
+    <div class="progress" id="progress">Carregando progresso…</div>
+  </header>
+  <div class="filters">
+    <label>Categoria <select id="category"><option value="">Todas</option></select></label>
+    <label>Dificuldade <select id="difficulty"><option value="">Todas</option><option value="easy">Fácil</option><option value="medium">Média</option><option value="hard">Difícil</option><option value="expert">Especialista</option></select></label>
+  </div>
+  <p class="start-hint" role="note"><strong>Comece por um cenário “Pendente”:</strong> abra o cartão, leia o dilema e registre sua resposta em quatro partes.</p>
+  <div id="message" aria-live="polite"></div>
+  <section id="grid" aria-label="Cenários"></section>
+</main>
+<script>
+  var params = new URLSearchParams(location.search);
+  var token = params.get('token') || '';
+  var scenarios = [];
+  function route(page, extra) { var q = new URLSearchParams(extra || {}); q.set('page', page); q.set('token', token); return '?' + q.toString(); }
+  function text(value) { return String(value === undefined || value === null ? '' : value); }
+  function fail(message) { document.getElementById('message').innerHTML = '<p class="error"></p>'; document.querySelector('#message p').textContent = message; }
+  function render() {
+    var category = document.getElementById('category').value;
+    var difficulty = document.getElementById('difficulty').value;
+    var list = scenarios.filter(function (item) { return (!category || item.category === category) && (!difficulty || item.difficulty === difficulty); });
+    var grid = document.getElementById('grid'); grid.innerHTML = '';
+    if (!list.length) { var empty=document.createElement('p'); empty.className='empty'; empty.textContent='Nenhum cenário corresponde aos filtros.'; grid.appendChild(empty); return; }
+    list.forEach(function (item) {
+      var card=document.createElement('article'); if(item.completed) card.className='done';
+      var status=document.createElement('p'); status.className='status'; status.textContent=item.completed?'Concluído':'Pendente';
+      var title=document.createElement('h2'); title.textContent=text(item.title);
+      var meta=document.createElement('p'); meta.className='meta'; meta.textContent=text(item.category)+' · '+text(item.difficulty);
+      var description=document.createElement('p'); description.textContent=text(item.description).slice(0,220);
+      var link=document.createElement('a'); link.className='button'; link.target='_top'; link.href=route('scenario_detail',{scenario:item.id}); link.textContent=item.completed?'Rever cenário':'Abrir cenário';
+      card.append(status,title,meta,description,link); grid.appendChild(card);
+    });
+  }
+  function loaded(result) {
+    if (!result || !result.success) { fail((result&&result.error)||'Não foi possível carregar os cenários.'); return; }
+    scenarios=result.data.scenarios||[];
+    document.getElementById('progress').textContent=result.data.completed+' de '+result.data.total+' cenários concluídos';
+    var categories={}; scenarios.forEach(function(item){categories[item.category]=true;});
+    Object.keys(categories).sort().forEach(function(value){var option=document.createElement('option');option.value=value;option.textContent=value;document.getElementById('category').appendChild(option);});
+    render();
+  }
+  document.getElementById('category').addEventListener('change',render); document.getElementById('difficulty').addEventListener('change',render);
+  if (!token) { fail('Sessão ausente. Entre novamente.'); }
+  else if (typeof google!=='undefined'&&google.script&&google.script.run) google.script.run.withSuccessHandler(loaded).withFailureHandler(function(err){fail('Erro ao carregar cenários. Tente novamente.');}).api_flowGetScenarios(token);
+  else fail('Esta página precisa ser aberta pelo aplicativo publicado.');
+</script>
+</body></html>

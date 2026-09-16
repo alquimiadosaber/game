@@ -1,0 +1,101 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — profile.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Página de perfil do utilizador. Exibe dados pessoais, vectores psicométricos, histórico de progresso e conquistas desbloqueadas.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Foto/avatar do utilizador.
+   • Dados pessoais (nome, e-mail, papel).
+   • Vectores psicométricos (barras FIL, PSI, IA).
+   • Histórico de progresso (% cenários completados).
+   • Conquistas/badges desbloqueados.
+   • Botão de editar perfil.
+   • Botão de alterar senha.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • UserProfileService.getProfile(userId) — dados do perfil.
+   • DimensionService.getAggregateVector(userId) — vectores.
+   • GamificationService.getBadges(userId) — conquistas.
+   • PasswordService.changePassword() — alteração de senha.
+ * * Read-only by default — edição via botão separado.
+   Vector visualization — barras visuais dos vectores.
+   Achievement showcase — vitrine de conquistas.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Perfil</title>
+  <?!= HtmlService.createHtmlOutputFromFile('StyleBase').getContent() ?>
+  <style>
+    body { padding:0; }
+    main { max-width:1100px; margin:auto; padding:28px 20px 60px; } header { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:24px; } h1 { margin:0; font-size:clamp(1.7rem,4vw,2.5rem); } h2 { margin-top:0; font-size:1.1rem; }
+    .muted { color:var(--muted); } .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; } .card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:22px; }
+    .identity { display:flex; gap:18px; align-items:center; } .avatar { width:76px; height:76px; border-radius:50%; object-fit:cover; background:#352361; } .identity h2 { margin:0 0 4px; } .pill { display:inline-flex; padding:4px 10px; border-radius:999px; background:rgba(45,212,160,.18); color:var(--ok); font-size:.82rem; }
+    .stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; } .stat { padding:12px; border-radius:12px; background:rgba(255,255,255,.06); } .stat strong { display:block; font-size:1.35rem; } .stat small { color:var(--muted); }
+    .dimension { display:grid; grid-template-columns:46px 1fr 52px; align-items:center; gap:10px; margin:12px 0; } .bar { height:10px; background:rgba(255,255,255,.12); border-radius:99px; overflow:hidden; } .bar i { display:block; height:100%; background:linear-gradient(90deg,var(--accent),#8b5cf6); border-radius:inherit; }
+    .badge-list { display:flex; flex-wrap:wrap; gap:10px; padding:0; list-style:none; } .badge { padding:10px 12px; border:1px solid var(--line); border-radius:12px; } .badge strong { display:block; } .badge small { color:var(--muted); }
+    .status { min-height:24px; color:var(--muted); } .error { color:#fecaca; } a,button { min-height:48px; border:0; border-radius:10px; padding:10px 16px; font:inherit; font-weight:700; cursor:pointer; } a { display:inline-flex; align-items:center; color:var(--text); background:rgba(255,255,255,.1); text-decoration:none; }
+    @media (max-width:700px) { .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <?!= HtmlService.createHtmlOutputFromFile('header').getContent() ?>
+  <main id="profile-container">
+    <header><div><h1>Meu perfil</h1><p class="muted">Sua trajetória, dimensões e conquistas no simulador.</p></div><a href="?page=welcome&amp;token=<?= session && session.sessionId ? session.sessionId : '' ?>">Voltar ao início</a></header>
+    <p id="status" class="status" role="status" aria-live="polite">Carregando perfil...</p>
+    <section class="grid" aria-busy="true" id="profileGrid">
+      <article class="card identity"><img id="avatar" class="avatar" alt="Avatar do utilizador"><div><h2 id="fullName">—</h2><p id="email" class="muted">—</p><span id="role" class="pill">—</span></div></article>
+      <article class="card"><h2>Progresso</h2><div class="stat-grid"><div class="stat"><strong id="xp">0</strong><small>XP total</small></div><div class="stat"><strong id="level">1</strong><small>Nível</small></div><div class="stat"><strong id="completion">0%</strong><small>Cenários concluídos</small></div></div></article>
+      <article class="card"><h2>Dimensões psicométricas</h2><div id="dimensions" class="muted">Sem medições ainda.</div></article>
+      <article class="card"><h2>Conquistas desbloqueadas</h2><ul id="badges" class="badge-list"><li class="muted">Nenhuma conquista desbloqueada.</li></ul></article>
+    </section>
+  </main>
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    function callProfile() {
+      return new Promise(function(resolve, reject) {
+        if (!authToken || !window.google || !google.script || !google.script.run) { reject(new Error('Sessão indisponível.')); return; }
+        google.script.run.withSuccessHandler(function(result) {
+          if (!result || !result.success) { reject(new Error(result && result.error ? result.error : 'Não foi possível carregar o perfil.')); return; }
+          resolve(result.data);
+        }).withFailureHandler(function(error) { reject(new Error(error && error.message ? error.message : 'Falha de comunicação.')); }).api_getProfileDashboard(authToken);
+      });
+    }
+    function text(id, value) { document.getElementById(id).textContent = value == null || value === '' ? '—' : String(value); }
+    function render(data) {
+      var profile = data.profile || {}, stats = profile.statistics || {};
+      document.getElementById('avatar').src = profile.avatar || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80"%3E%3Crect width="80" height="80" fill="%23352361"/%3E%3C/svg%3E';
+      text('fullName', profile.fullName || profile.email); text('email', profile.email); text('role', profile.role || 'utilizador');
+      text('xp', stats.totalXP || 0); text('level', stats.level || 1); text('completion', (profile.completionRate || 0) + '%');
+      var dimensions = profile.dimensions || {}, keys = ['IA','FIL','PSI','NEU','BIO','FIS','SOC','ART'], holder = document.getElementById('dimensions'); holder.innerHTML = '';
+      var total = keys.reduce(function(sum, key) { return sum + Math.max(0, Number(dimensions[key] || 0)); }, 0) || 1;
+      keys.forEach(function(key) { var value = Math.round((Math.max(0, Number(dimensions[key] || 0)) / total) * 100); var row = document.createElement('div'); row.className = 'dimension'; row.innerHTML = '<strong>' + key + '</strong><span class="bar"><i style="width:' + value + '%"></i></span><span>' + value + '%</span>'; holder.appendChild(row); });
+      var badges = document.getElementById('badges'); badges.innerHTML = '';
+      (data.badges || []).forEach(function(badge) { var item = document.createElement('li'); item.className = 'badge'; var title = document.createElement('strong'); title.textContent = (badge.icon || '🏆') + ' ' + (badge.name || badge.id); var desc = document.createElement('small'); desc.textContent = badge.description || 'Conquista desbloqueada'; item.appendChild(title); item.appendChild(desc); badges.appendChild(item); });
+      if (!badges.children.length) { var empty = document.createElement('li'); empty.className = 'muted'; empty.textContent = 'Nenhuma conquista desbloqueada.'; badges.appendChild(empty); }
+      document.getElementById('profileGrid').setAttribute('aria-busy', 'false'); document.getElementById('status').textContent = 'Perfil atualizado.';
+    }
+    callProfile().then(render).catch(function(error) { document.getElementById('status').textContent = error.message; document.getElementById('status').className = 'status error'; });
+  </script>
+  <?!= HtmlService.createHtmlOutputFromFile('footer').getContent() ?>
+</body>
+</html>

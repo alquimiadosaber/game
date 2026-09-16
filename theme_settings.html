@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Aparência</title>
+  <style>
+    :root { color-scheme:dark; --bg:#100b1b; --surface:#1c1430; --text:#f6f0ff; --muted:#c8badf; --accent:#a78bfa; --border:#493865; font-family:Inter,system-ui,sans-serif; }
+    :root[data-theme="light"] { color-scheme:light; --bg:#f7f3ff; --surface:#fff; --text:#261c38; --muted:#635775; --accent:#6d28d9; --border:#d9ccef; }
+    :root[data-contrast="high"] { --accent:#fbbf24; --border:currentColor; }
+    :root[data-density="compact"] .card { padding:14px; }
+    :root[data-font="large"] { font-size:118%; }
+    * { box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); margin:0; min-width:320px; }
+    main { margin:auto; max-width:760px; padding:24px; }
+    a { color:var(--accent); }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:18px; margin:18px 0; padding:22px; }
+    .grid { display:grid; gap:18px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    label { display:grid; gap:8px; font-weight:700; }
+    select, button { background:var(--surface); border:1px solid var(--border); border-radius:10px; color:var(--text); font:inherit; min-height:48px; padding:10px 12px; }
+    button.primary { background:var(--accent); color:#130b24; font-weight:800; }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:20px; }
+    .preview { border-left:5px solid var(--accent); }
+    .muted { color:var(--muted); }
+    :root[data-motion="reduced"] * { scroll-behavior:auto !important; transition:none !important; }
+    @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; transition:none !important; } }
+    @media (max-width:560px) { main{padding:16px}.grid{grid-template-columns:1fr}.actions{align-items:stretch;flex-direction:column} }
+  </style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 48px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+</head>
+<body>
+  <main>
+    <a id="backLink" target="_top" href="?page=settings">← Voltar às preferências</a>
+    <h1>Aparência e leitura</h1>
+    <p class="muted">A prévia é imediata e a escolha fica guardada neste dispositivo.</p>
+
+    <form id="themeForm" class="card">
+      <div class="grid">
+        <label for="theme">Tema
+          <select id="theme"><option value="dark">Escuro</option><option value="light">Claro</option><option value="system">Seguir dispositivo</option></select>
+        </label>
+        <label for="font">Tamanho do texto
+          <select id="font"><option value="regular">Regular</option><option value="large">Ampliado</option></select>
+        </label>
+        <label for="density">Densidade
+          <select id="density"><option value="comfortable">Confortável</option><option value="compact">Compacta</option></select>
+        </label>
+        <label for="contrast">Contraste
+          <select id="contrast"><option value="standard">Padrão</option><option value="high">Alto</option></select>
+        </label>
+        <label for="motion">Movimento
+          <select id="motion"><option value="standard">Padrão</option><option value="reduced">Reduzido</option></select>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit">Salvar neste dispositivo</button>
+        <button id="resetTheme" type="button">Restaurar padrão</button>
+      </div>
+    </form>
+
+    <section class="card preview" aria-labelledby="previewTitle">
+      <h2 id="previewTitle">Prévia</h2>
+      <p>Compare títulos, texto corrido, bordas e controles antes de salvar.</p>
+      <button type="button">Exemplo de ação</button>
+    </section>
+    <p id="themeStatus" role="status" aria-live="polite">Verificando sessão…</p>
+  </main>
+  <script>
+  (function () {
+    var STORAGE_KEY = 'alquimia_theme_preferences_v1';
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var defaults = { theme:'dark', font:'regular', density:'comfortable', contrast:'standard', motion:'standard' };
+    var ids = Object.keys(defaults);
+
+    function read() {
+      try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')); }
+      catch (error) { return Object.assign({}, defaults); }
+    }
+    function apply(preferences) {
+      var theme = preferences.theme;
+      if (theme === 'system') theme = window.matchMedia && window.matchMedia('(prefers-color-scheme:light)').matches ? 'light' : 'dark';
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.dataset.font = preferences.font;
+      document.documentElement.dataset.density = preferences.density;
+      document.documentElement.dataset.contrast = preferences.contrast;
+      document.documentElement.dataset.motion = preferences.motion;
+      ids.forEach(function (id) { document.getElementById(id).value = preferences[id]; });
+    }
+    function current() {
+      var value = {};
+      ids.forEach(function (id) { value[id] = document.getElementById(id).value; });
+      return value;
+    }
+    ids.forEach(function (id) { document.getElementById(id).addEventListener('change', function () { apply(current()); }); });
+    document.getElementById('themeForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(current())); }
+      catch (error) { document.getElementById('themeStatus').textContent = 'O navegador bloqueou o armazenamento local.'; return; }
+      document.getElementById('themeStatus').textContent = 'Preferências de aparência salvas neste dispositivo.';
+    });
+    document.getElementById('resetTheme').addEventListener('click', function () {
+      try { localStorage.removeItem(STORAGE_KEY); } catch (error) {}
+      apply(defaults);
+      document.getElementById('themeStatus').textContent = 'A aparência padrão foi restaurada.';
+    });
+    document.getElementById('backLink').href = '?page=settings&token=' + encodeURIComponent(authToken);
+    apply(read());
+
+    if (!authToken || !window.google || !google.script || !google.script.run) {
+      document.getElementById('themeStatus').textContent = 'Sessão indisponível; a preferência local ainda pode ser usada.';
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (result) { document.getElementById('themeStatus').textContent = result && result.success ? 'Sessão ativa. Escolha sua aparência.' : 'Sessão expirada; entre novamente.'; })
+      .withFailureHandler(function () { document.getElementById('themeStatus').textContent = 'Não foi possível verificar a sessão.'; })
+      .api_getUserSettings(authToken);
+  }());
+  </script>
+</body>
+</html>

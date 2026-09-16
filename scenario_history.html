@@ -1,0 +1,192 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — scenario_history.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Histórico de cenários resolvidos pelo utilizador. Pontuação, data, vectores alocados e link para revisão.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • Tabela de cenários resolvidos.
+   • Pontuação de cada cenário.
+   • Data de resolução.
+   • Proporção alocada (FIL/PSI/IA).
+   • Botão de revisão por cenário.
+   • Estatísticas resumidas (média, melhor, pior).
+   • Filtro por período.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • InteractionController.getInteractionsByUser(userId) — interações.
+   • ScoreController.getScoresByUser(userId) — pontuações.
+   • ScenarioController.getScenarioById() — dados do cenário.
+ * * Sortable table — ordenação por data, pontuação, categoria.
+   Statistics summary — resumo estatístico no topo.
+   Review capability — possibilidade de rever cenários.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — scenario_history</title>
+  <style>
+    :root{color-scheme:dark;--bg:#111827;--panel:#1f2937;--line:#374151;--text:#f9fafb;--muted:#cbd5e1;--accent:#f59e0b;--danger:#fecaca}
+    body{margin:0;background:linear-gradient(145deg,#0f172a,var(--bg));color:var(--text);font:16px/1.5 system-ui,sans-serif}
+    .page{width:min(1080px,calc(100% - 28px));margin:0 auto;padding:28px 0 48px}.page-header,.toolbar,.summary{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    h1{margin:0}.muted{color:var(--muted)}.button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:9px;background:var(--accent);color:#201300;text-decoration:none;font-weight:800}
+    .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:24px 0}.stat,.attempt{background:rgba(31,41,55,.94);border:1px solid var(--line);border-radius:14px;padding:18px}.stat strong{display:block;font-size:1.75rem}.stat span{color:var(--muted)}
+    label{font-weight:700}select{min-height:44px;border:1px solid var(--line);border-radius:8px;background:#111827;color:var(--text);padding:0 12px}.attempts{display:grid;gap:14px;margin-top:18px}.attempt header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.attempt h2{font-size:1.12rem;margin:0}.meta{color:var(--muted);margin:5px 0 14px}.mix{display:flex;gap:8px;flex-wrap:wrap}.mix span{border:1px solid var(--line);border-radius:999px;padding:4px 9px}.score{color:#fde68a;font-weight:800}.error{color:var(--danger)}
+    @media(max-width:700px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <main class="page" id="scenario_history-container">
+    <header class="page-header"><div><h1>Histórico de cenários</h1><p class="muted">Reveja suas tentativas, escolhas e pontuações.</p></div><a id="backLink" class="button" target="_top">Voltar aos cenários</a></header>
+    <section class="summary" aria-label="Resumo do histórico">
+      <div class="stat"><strong id="attemptCount">—</strong><span>Tentativas</span></div><div class="stat"><strong id="completedCount">—</strong><span>Cenários concluídos</span></div><div class="stat"><strong id="averageScore">—</strong><span>Média</span></div><div class="stat"><strong id="bestScore">—</strong><span>Melhor pontuação</span></div>
+    </section>
+    <div class="toolbar"><label for="periodFilter">Período</label><select id="periodFilter"><option value="all">Todo o histórico</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option></select></div>
+    <p id="historyStatus" class="muted" role="status" aria-live="polite">Carregando histórico...</p><section id="historyList" class="attempts" aria-label="Tentativas realizadas"></section>
+  </main>
+  <script>
+    (function(){
+      var token='<?= session && session.sessionId ? session.sessionId : "" ?>';var attempts=[];
+      function route(page,extra){var q=new URLSearchParams(extra||{});q.set('page',page);q.set('token',token);return'?'+q.toString();}
+      function formatDate(value){var d=new Date(value);return isNaN(d.getTime())?'Data não informada':d.toLocaleString('pt-BR');}
+      function setText(id,value){document.getElementById(id).textContent=value===null||value===undefined?'—':value;}
+      function render(){var days=document.getElementById('periodFilter').value;var limit=days==='all'?null:Date.now()-Number(days)*86400000;var visible=attempts.filter(function(item){return!limit||new Date(item.completedAt).getTime()>=limit;});var list=document.getElementById('historyList');list.innerHTML='';document.getElementById('historyStatus').textContent=visible.length?visible.length+' tentativa(s) exibida(s).':'Nenhuma tentativa neste período.';
+        visible.forEach(function(item){var article=document.createElement('article');article.className='attempt';var header=document.createElement('header');var title=document.createElement('h2');title.textContent=item.title;var score=document.createElement('span');score.className='score';score.textContent=item.score===null?'Sem pontuação':item.score+' pontos';header.append(title,score);var meta=document.createElement('p');meta.className='meta';meta.textContent=item.category+' · '+item.difficulty+' · '+formatDate(item.completedAt);var mix=document.createElement('div');mix.className='mix';[['FIL',item.fil],['PSI',item.psi],['IA',item.ia]].forEach(function(pair){var chip=document.createElement('span');chip.textContent=pair[0]+': '+pair[1];mix.appendChild(chip);});var response=document.createElement('p');response.textContent=item.response||'Resposta textual não registrada.';var link=document.createElement('a');link.className='button';link.target='_top';link.href=route('scenario_detail',{scenario:item.scenarioId});link.textContent='Rever cenário';article.append(header,meta,mix,response,link);list.appendChild(article);});}
+      function loaded(result){
+        document.getElementById('scenario_history-container').setAttribute('aria-busy','false');
+        if(!result||result.success!==true||!result.data||!Array.isArray(result.data.attempts)){
+          document.getElementById('historyStatus').className='error';
+          document.getElementById('historyStatus').textContent='Histórico indisponível. Confira sua sessão e recarregue para tentar novamente.';return;
+        }
+        attempts=result.data.attempts.filter(function(item){return item&&typeof item==='object';});
+        var s=result.data.summary||{};setText('attemptCount',s.attempts);setText('completedCount',s.completedScenarios);setText('averageScore',s.averageScore);setText('bestScore',s.bestScore);
+        document.getElementById('periodFilter').disabled=false;render();
+      }
+      var renderAttempts=render;
+      render=function(){
+        renderAttempts();
+        var days=document.getElementById('periodFilter').value,limit=days==='all'?null:Date.now()-Number(days)*86400000;
+        var visible=attempts.filter(function(item){return !limit||new Date(item.completedAt).getTime()>=limit;});
+        Array.prototype.forEach.call(document.getElementById('historyList').children,function(article,index){
+          var id=document.createElement('p');id.className='meta';id.textContent='Identificador da tentativa: '+(visible[index].id||'não informado');article.appendChild(id);
+        });
+      };
+      document.getElementById('periodFilter').disabled=true;
+      document.getElementById('scenario_history-container').setAttribute('aria-busy','true');
+      document.getElementById('backLink').href=route('scenario_list');document.getElementById('periodFilter').addEventListener('change',render);
+      if(!token){loaded({success:false,error:'Sessão ausente. Entre novamente.'});}else if(typeof google!=='undefined'&&google.script&&google.script.run){google.script.run.withSuccessHandler(loaded).withFailureHandler(function(){loaded({success:false,error:'Erro de comunicação. Tente novamente.'});}).api_flowGetHistory(token);}else{loaded({success:false,error:'Abra esta página pelo aplicativo publicado.'});}
+    }());
+  </script>
+</body>
+</html>

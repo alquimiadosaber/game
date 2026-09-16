@@ -1,0 +1,149 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — StyleBase.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Estilos base compartilhados por todas as páginas do sistema. Inclui:
+ *   - Paleta de cores das dimensões epistémicas
+ *   - Reset CSS básico
+ *   - Estilos mobile-first (codex-s20-mobile-first)
+ *   - Padrões WCAG 2.1 AA da FROTA
+ *
+ * USO:
+ *   Incluir em todas as páginas HTML via scriptlet:
+ *   <?!= HtmlService.createHtmlOutputFromFile('StyleBase').getContent() ?>
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+/* ── Paleta de cores das dimensões epistémicas ────────────────────────────── */
+:root {
+  --ia:  #ff4d8d;  /* Inteligência Artificial - rosa */
+  --fil: #4cc9f0;  /* Filosofia - azul claro */
+  --psi: #ff9e2c;  /* Psicometria - laranja */
+  --neu: #8b5cf6;  /* Neurociência - roxo */
+  --bio: #2dd4a0;  /* Biologia - verde */
+  --fis: #ffd23f;  /* Física - amarelo */
+  --soc: #00c2c7;  /* Sociologia - ciano */
+  --art: #ff6b6b;  /* Artes - vermelho coral */
+  --bg1: #160f2e;  /* Background primário - roxo escuro */
+  --bg2: #2a1a52;  /* Background secundário - roxo médio */
+  --card: rgba(255,255,255,.06);  /* Card background */
+  --text: #f3eeff;  /* Texto principal - branco lilás */
+  --muted: #b7a8e0;  /* Texto secundário - lilás */
+  --ok: #2dd4a0;  /* Cor de sucesso - verde */
+}
+
+/* ── Reset CSS básico ──────────────────────────────────────────────────────── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: radial-gradient(1200px 700px at 70% -10%, var(--bg2), var(--bg1) 70%);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+</style>
+
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+
+<style id="fleet-mobile-wcag-aa">
+  /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+  html, body { max-width: 100%; overflow-x: hidden; }
+  :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+    min-width: 48px !important;
+    min-height: 48px !important;
+    touch-action: manipulation;
+  }
+</style>

@@ -1,0 +1,601 @@
+<!--
+ * ══════════════════════════════════════════════════════════════════════════════
+ * ALQUIMIA DO SABER — admin_dashboard.html
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * DESCRIÇÃO:
+ *   Painel administrativo. Estatísticas globais: utilizadores, cenários ativos, interações, resultados e métricas de engajamento.
+ *
+ * ELEMENTOS PRINCIPAIS:
+ *   • KPIs: total de utilizadores, cenários, interações, resultados.
+   • Gráfico de utilização por dia/semana.
+   • Lista de utilizadores recentes.
+   • Vocações mais recomendadas.
+   • Alertas do sistema (quota, erros).
+   • Botões de acesso rápido (CRUD).
+   • Indicador de quota de triggers.
+ *
+ * INTEGRAÇÕES (google.script.run):
+ *   • UserController.getAllUsers() — utilizadores.
+   • AnalyticsService.getSystemStatistics() — estatísticas.
+   • ResultController.getAllResults() — resultados.
+   • TriggerService.quotaCheck() — quota de triggers.
+   • LoggerService.getLogs() — alertas e erros.
+ * * Admin-only access — restrito a utilizadores admin.
+   KPI dashboard — indicadores-chave no topo.
+   Quick actions — atalhos para operações CRUD.
+   System health — monitoramento de quota e erros.
+FUNCIONALIDADES ESPECÍFICAS:
+ *   • Renderização server-side via scriptlets (<?= ?>).
+ *   • Event listeners para interações do utilizador.
+ *   • Feedback visual com toast notifications.
+ *
+ * PADRÕES:
+ *   Vanilla JavaScript — sem dependências externas.
+ *   Async handlers — .withSuccessHandler() e .withFailureHandler().
+ *   Contextual escaping — injeção segura via scriptlets do HTML Service.
+ *
+ * AUTOR: Alquimia do Saber
+ * VERSÃO: 1.0.0
+ * ══════════════════════════════════════════════════════════════════════════════
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alquimia do Saber — Painel Administrativo</title>
+  <style>
+    :root {
+      --ia:  #ff4d8d;  --fil: #4cc9f0;  --psi: #ff9e2c;  --neu: #8b5cf6;
+      --bio: #2dd4a0;  --fis: #ffd23f;  --soc: #00c2c7;  --art: #ff6b6b;
+      --bg1: #160f2e;  --bg2: #2a1a52;  --card: rgba(255,255,255,.06);
+      --text: #f3eeff; --muted: #b7a8e0; --success: #2dd4a0; --warning: #ff9e2c; --danger: #ff4d8d;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 700px at 50% -10%, var(--bg2), var(--bg1) 70%);
+      color: var(--text); min-height: 100vh; padding: 28px 20px 60px;
+    }
+    header { max-width: 1400px; margin: 0 auto 26px; display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 16px; }
+    header h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+    .header-actions { display: flex; gap: 10px; }
+    .btn { padding: 10px 20px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px;
+      background: var(--card); color: var(--text); cursor: pointer; font-size: .9rem;
+      transition: all .2s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+    .btn:hover { background: rgba(255,255,255,.1); transform: translateY(-2px); }
+    .btn-primary { background: var(--ia); border-color: var(--ia); font-weight: 600; }
+    .btn-primary:hover { background: #ff3377; }
+
+    .dashboard { max-width: 1400px; margin: 0 auto; display: grid; gap: 20px; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;
+      margin-bottom: 20px; }
+    .kpi-card { background: var(--card); border: 1px solid rgba(255,255,255,.12); border-radius: 16px;
+      padding: 20px; position: relative; overflow: hidden; }
+    .kpi-card::before { content: ""; position: absolute; top: 0; right: 0; width: 60px; height: 60px;
+      background: var(--accent); opacity: .15; border-radius: 0 0 0 100%; }
+    .kpi-icon { font-size: 2rem; margin-bottom: 10px; }
+    .kpi-value { font-size: 2rem; font-weight: 800; margin-bottom: 4px; }
+    .kpi-label { color: var(--muted); font-size: .85rem; margin-bottom: 8px; }
+    .kpi-change { font-size: .8rem; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .kpi-change.positive { color: var(--success); }
+    .kpi-change.negative { color: var(--danger); }
+
+    .row-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    .row-1 { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    @media (max-width: 1024px) { .row-2 { grid-template-columns: 1fr; } }
+
+    .widget { background: var(--card); border: 1px solid rgba(255,255,255,.12); border-radius: 20px;
+      padding: 24px; }
+    .widget-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .widget-title { font-size: 1.2rem; font-weight: 700; }
+    .widget-action { color: var(--ia); font-size: .85rem; cursor: pointer; text-decoration: none; }
+    .widget-action:hover { text-decoration: underline; }
+
+    .usage-chart {
+      min-height: 280px;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 12px;
+      padding: 18px 12px 12px;
+      background: rgba(255,255,255,.03);
+      border-radius: 12px;
+    }
+    .usage-chart-bars {
+      min-height: 210px;
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      padding: 0 4px;
+      border-bottom: 1px solid rgba(255,255,255,.12);
+    }
+    .usage-chart-bar {
+      flex: 1;
+      min-width: 28px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      align-items: end;
+      gap: 6px;
+      text-align: center;
+    }
+    .usage-chart-fill {
+      align-self: end;
+      width: 100%;
+      min-height: 4px;
+      border-radius: 8px 8px 3px 3px;
+      background: linear-gradient(180deg, var(--fil), var(--ia));
+      transition: height .35s ease;
+    }
+    .usage-chart-value,
+    .usage-chart-label {
+      display: block;
+      font-size: .72rem;
+    }
+    .usage-chart-value { color: var(--text); font-weight: 700; }
+    .usage-chart-label { color: var(--muted); }
+    .usage-chart-status {
+      min-height: 1.2rem;
+      color: var(--muted);
+      font-size: .8rem;
+      text-align: center;
+    }
+    .usage-chart-empty {
+      align-self: center;
+      justify-self: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px 12px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .usage-chart-fill { transition: none; }
+    }
+
+    .user-list { list-style: none; }
+    .user-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px;
+      transition: background .2s; margin-bottom: 8px; }
+    .user-item:hover { background: rgba(255,255,255,.05); }
+    .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--ia);
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; }
+    .user-info { flex: 1; }
+    .user-name { font-weight: 600; margin-bottom: 2px; }
+    .user-meta { font-size: .8rem; color: var(--muted); }
+    .user-badge { padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+    .user-badge.admin { background: rgba(255,77,141,.2); color: var(--ia); }
+    .user-badge.student { background: rgba(76,201,240,.2); color: var(--fil); }
+
+    .vocation-list { list-style: none; }
+    .vocation-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,.08); }
+    .vocation-item:last-child { border-bottom: none; }
+    .vocation-name { font-weight: 600; }
+    .vocation-count { color: var(--muted); font-size: .85rem; }
+    .vocation-bar { height: 6px; background: rgba(255,255,255,.08); border-radius: 999px; margin-top: 6px;
+      overflow: hidden; }
+    .vocation-bar .fill { height: 100%; background: linear-gradient(90deg, var(--ia), var(--fil));
+      border-radius: 999px; }
+
+    .alert-list { list-style: none; }
+    .alert-item { display: flex; gap: 12px; padding: 12px; border-radius: 12px; margin-bottom: 10px;
+      border-left: 3px solid; }
+    .alert-item.warning { background: rgba(255,158,44,.1); border-color: var(--warning); }
+    .alert-item.error { background: rgba(255,77,141,.1); border-color: var(--danger); }
+    .alert-item.info { background: rgba(76,201,240,.1); border-color: var(--fil); }
+    .alert-icon { font-size: 1.3rem; }
+    .alert-content { flex: 1; }
+    .alert-title { font-weight: 600; margin-bottom: 4px; }
+    .alert-message { font-size: .85rem; color: var(--muted); }
+
+    .quota-meter { margin-top: 16px; }
+    .quota-bar { height: 12px; background: rgba(255,255,255,.08); border-radius: 999px; overflow: hidden; }
+    .quota-bar .fill { height: 100%; border-radius: 999px; transition: width .6s ease; }
+    .quota-info { display: flex; justify-content: space-between; margin-top: 8px; font-size: .85rem; }
+  </style>
+<style>
+/* codex-s20-mobile-first: Samsung S20 / Chrome mobile baseline (360x800 CSS px) */
+@media screen {
+  :where(html) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  :where(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
+  :where(body) {
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  :where(main, .app, .page, .container, .content, .main-content, .dashboard, .view) {
+    max-width: 100%;
+  }
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+    height: auto;
+  }
+  :where(p, li, td, th, label, legend, button, a, h1, h2, h3, h4, h5, h6) {
+    overflow-wrap: anywhere;
+  }
+  :where(input, select, textarea, button) {
+    font: inherit;
+    max-width: 100%;
+  }
+  :where(input, select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+  :where(button, [role="button"], input, select, textarea, a) {
+    touch-action: manipulation;
+  }
+  :where(.table-wrap, .table-wrapper, .table-responsive, .table-container, .responsive-table, .data-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+@media (max-width: 480px) {
+  :where(body) {
+    font-size: 16px;
+  }
+  :where(.grid, .cards, .dashboard-grid, .stats-grid, .form-grid, .filters-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  :where(.toolbar, .actions, .button-row, .filters, .form-actions, .modal-actions, .header-actions) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  :where(.btn, button, input, select, textarea) {
+    min-height: 44px;
+  }
+  :where(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :where(th, td) {
+    white-space: nowrap;
+  }
+  :where(.card, .panel, .modal, .dialog, .drawer) {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 360px) {
+  :where(body) {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  :where(.card, .panel, .section, .modal-content, .dialog-content) {
+    padding: 12px;
+  }
+  :where(h1) {
+    font-size: clamp(1.45rem, 1.2rem + 2vw, 2rem);
+  }
+  :where(h2) {
+    font-size: clamp(1.2rem, 1rem + 1.4vw, 1.55rem);
+  }
+}
+</style>
+  <style id="fleet-mobile-wcag-aa">
+    /* Contrato FROTA: ergonomia S20 e WCAG 2.1 AA. */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    :is(button, [role="button"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+      min-width: 48px !important;
+      min-height: 48px !important;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚙️ Painel Administrativo</h1>
+    <div class="header-actions">
+      <a href="?page=admin_users" class="btn">👥 Utilizadores</a>
+      <a href="?page=admin_scenarios" class="btn">📝 Cenários</a>
+      <a href="?page=admin_vocations" class="btn">🧪 Vocações</a>
+      <a href="?page=admin_settings" class="btn btn-primary">⚙️ Configurações</a>
+    </div>
+  </header>
+
+  <div class="dashboard">
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card" style="--accent: var(--ia)">
+        <div class="kpi-icon">👥</div>
+        <div class="kpi-value" id="totalUsers">0</div>
+        <div class="kpi-label">Total de Utilizadores</div>
+        <div class="kpi-change positive"><span>↑</span> <span id="usersChange">0%</span> este mês</div>
+      </div>
+      <div class="kpi-card" style="--accent: var(--fil)">
+        <div class="kpi-icon">📝</div>
+        <div class="kpi-value" id="totalScenarios">0</div>
+        <div class="kpi-label">Cenários Ativos</div>
+        <div class="kpi-change positive"><span>↑</span> <span id="scenariosChange">0%</span> este mês</div>
+      </div>
+      <div class="kpi-card" style="--accent: var(--psi)">
+        <div class="kpi-icon">🔄</div>
+        <div class="kpi-value" id="totalInteractions">0</div>
+        <div class="kpi-label">Interações Totais</div>
+        <div class="kpi-change positive"><span>↑</span> <span id="interactionsChange">0%</span> esta semana</div>
+      </div>
+      <div class="kpi-card" style="--accent: var(--bio)">
+        <div class="kpi-icon">✅</div>
+        <div class="kpi-value" id="totalResults">0</div>
+        <div class="kpi-label">Resultados Gerados</div>
+        <div class="kpi-change positive"><span>↑</span> <span id="resultsChange">0%</span> esta semana</div>
+      </div>
+    </div>
+
+    <!-- Row 1: Gráfico de Utilização + Utilizadores Recentes -->
+    <div class="row-2">
+      <div class="widget">
+        <div class="widget-header">
+          <h2 class="widget-title">📊 Utilização nos Últimos 7 Dias</h2>
+          <a href="?page=analytics_dashboard" class="widget-action">Ver mais →</a>
+        </div>
+        <div class="usage-chart" id="usageChart" role="img" aria-label="Utilização nos últimos 7 dias">
+          <div class="usage-chart-bars" id="usageChartBars"></div>
+          <p class="usage-chart-status" id="usageChartStatus" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div class="widget">
+        <div class="widget-header">
+          <h2 class="widget-title">👤 Utilizadores Recentes</h2>
+          <a href="?page=admin_users" class="widget-action">Ver todos →</a>
+        </div>
+        <ul class="user-list" id="recentUsers">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+    </div>
+
+    <!-- Row 2: Vocações Mais Recomendadas + Alertas do Sistema -->
+    <div class="row-2">
+      <div class="widget">
+        <div class="widget-header">
+          <h2 class="widget-title">🏆 Vocações Mais Recomendadas</h2>
+          <a href="?page=admin_vocations" class="widget-action">Ver todas →</a>
+        </div>
+        <ul class="vocation-list" id="topVocations">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+
+      <div class="widget">
+        <div class="widget-header">
+          <h2 class="widget-title">⚠️ Alertas do Sistema</h2>
+          <a href="?page=admin_logs" class="widget-action">Ver logs →</a>
+        </div>
+        <ul class="alert-list" id="systemAlerts">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+    </div>
+
+    <!-- Row 3: Quota de Triggers -->
+    <div class="row-1">
+      <div class="widget">
+        <div class="widget-header">
+          <h2 class="widget-title">⏱️ Quota de Triggers do Google Apps Script</h2>
+          <span class="widget-action" style="cursor: default; color: var(--muted);">Atualizado agora</span>
+        </div>
+        <div class="quota-meter">
+          <div class="quota-bar">
+            <div class="fill" id="quotaFill" style="width: 0%; background: var(--success);"></div>
+          </div>
+          <div class="quota-info">
+            <span id="quotaUsed">0</span>
+            <span id="quotaLimit">Limite: 0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var authToken = '<?= session && session.sessionId ? session.sessionId : "" ?>';
+    var DEMO_DATA = {
+      kpis: {
+        totalUsers: 247,
+        usersChange: 12.5,
+        totalScenarios: 18,
+        scenariosChange: 5.8,
+        totalInteractions: 1543,
+        interactionsChange: 23.4,
+        totalResults: 892,
+        resultsChange: 18.7
+      },
+      recentUsers: [
+        { id: 1, name: 'Ana Silva', email: 'ana@escola.pt', role: 'student', lastSeen: '2 min' },
+        { id: 2, name: 'Carlos Mendes', email: 'carlos@escola.pt', role: 'admin', lastSeen: '15 min' },
+        { id: 3, name: 'Beatriz Costa', email: 'beatriz@escola.pt', role: 'student', lastSeen: '1 hora' },
+        { id: 4, name: 'Daniel Rocha', email: 'daniel@escola.pt', role: 'student', lastSeen: '2 horas' }
+      ],
+      topVocations: [
+        { name: 'Engenharia de IA', count: 145, maxCount: 247 },
+        { name: 'Ciência de Dados', count: 132, maxCount: 247 },
+        { name: 'Neurociência Cognitiva', count: 98, maxCount: 247 },
+        { name: 'Design de Interação', count: 87, maxCount: 247 },
+        { name: 'Biotecnologia', count: 76, maxCount: 247 }
+      ],
+      alerts: [
+        { type: 'warning', icon: '⚠️', title: 'Quota de Triggers', message: 'Utilização em 78% - considere otimizar processos.' },
+        { type: 'info', icon: 'ℹ️', title: 'Novo Cenário', message: 'Cenário "Bioética Aplicada" foi publicado com sucesso.' },
+        { type: 'error', icon: '❌', title: 'Erro de Sincronização', message: 'Falha ao sincronizar dados com folha "Resultados" às 14:23.' }
+      ],
+      quota: {
+        used: 7823,
+        limit: 10000,
+        percent: 78.23
+      },
+      usageByDay: [
+        { label: 'Seg', value: 42 },
+        { label: 'Ter', value: 57 },
+        { label: 'Qua', value: 49 },
+        { label: 'Qui', value: 71 },
+        { label: 'Sex', value: 64 },
+        { label: 'Sáb', value: 28 },
+        { label: 'Dom', value: 36 }
+      ]
+    };
+
+    function renderKPIs(data) {
+      document.getElementById('totalUsers').textContent = data.totalUsers;
+      document.getElementById('usersChange').textContent = data.usersChange + '%';
+      document.getElementById('totalScenarios').textContent = data.totalScenarios;
+      document.getElementById('scenariosChange').textContent = data.scenariosChange + '%';
+      document.getElementById('totalInteractions').textContent = data.totalInteractions;
+      document.getElementById('interactionsChange').textContent = data.interactionsChange + '%';
+      document.getElementById('totalResults').textContent = data.totalResults;
+      document.getElementById('resultsChange').textContent = data.resultsChange + '%';
+    }
+
+    function renderUsageChart(points) {
+      var bars = document.getElementById('usageChartBars');
+      var status = document.getElementById('usageChartStatus');
+      if (!bars || !status) return;
+
+      bars.replaceChildren();
+      var validPoints = Array.isArray(points) ? points.filter(function(point) {
+        return point && point.label != null && isFinite(Number(point.value));
+      }).slice(-7) : [];
+
+      if (!validPoints.length) {
+        var empty = document.createElement('div');
+        empty.className = 'usage-chart-empty';
+        empty.textContent = 'Nenhum evento de utilização registrado no período.';
+        bars.appendChild(empty);
+        status.textContent = 'Sem dados para os últimos 7 dias.';
+        return;
+      }
+
+      var maxValue = validPoints.reduce(function(max, point) {
+        return Math.max(max, Math.max(0, Number(point.value)));
+      }, 1);
+
+      validPoints.forEach(function(point) {
+        var value = Math.max(0, Number(point.value));
+        var bar = document.createElement('div');
+        bar.className = 'usage-chart-bar';
+        bar.setAttribute('role', 'group');
+        bar.setAttribute('aria-label', String(point.label) + ': ' + value + ' utilizações');
+
+        var valueNode = document.createElement('span');
+        valueNode.className = 'usage-chart-value';
+        valueNode.textContent = String(value);
+
+        var fill = document.createElement('span');
+        fill.className = 'usage-chart-fill';
+        fill.setAttribute('aria-hidden', 'true');
+        fill.style.height = Math.min(100, (value / maxValue) * 100).toFixed(1) + '%';
+
+        var label = document.createElement('span');
+        label.className = 'usage-chart-label';
+        label.textContent = String(point.label);
+
+        bar.appendChild(valueNode);
+        bar.appendChild(fill);
+        bar.appendChild(label);
+        bars.appendChild(bar);
+      });
+
+      status.textContent = 'Pico do período: ' + maxValue + ' utilizações.';
+    }
+
+    function renderRecentUsers(users) {
+      var container = document.getElementById('recentUsers');
+      container.innerHTML = '';
+      users.forEach(function(user) {
+        var li = document.createElement('li');
+        li.className = 'user-item';
+        li.innerHTML = 
+          '<div class="user-avatar">' + user.name.charAt(0).toUpperCase() + '</div>' +
+          '<div class="user-info">' +
+          '<div class="user-name">' + user.name + '</div>' +
+          '<div class="user-meta">' + user.email + ' • ' + user.lastSeen + '</div>' +
+          '</div>' +
+          '<span class="user-badge ' + user.role + '">' + (user.role === 'admin' ? 'Admin' : 'Estudante') + '</span>';
+        container.appendChild(li);
+      });
+    }
+
+    function renderTopVocations(vocations) {
+      var container = document.getElementById('topVocations');
+      container.innerHTML = '';
+      vocations.forEach(function(vocation) {
+        var li = document.createElement('li');
+        li.className = 'vocation-item';
+        var percent = (vocation.count / vocation.maxCount * 100).toFixed(1);
+        li.innerHTML = 
+          '<div style="flex: 1;">' +
+          '<div class="vocation-name">' + vocation.name + '</div>' +
+          '<div class="vocation-count">' + vocation.count + ' recomendações</div>' +
+          '<div class="vocation-bar"><div class="fill" style="width: ' + percent + '%"></div></div>' +
+          '</div>';
+        container.appendChild(li);
+      });
+    }
+
+    function renderAlerts(alerts) {
+      var container = document.getElementById('systemAlerts');
+      container.innerHTML = '';
+      alerts.forEach(function(alert) {
+        var li = document.createElement('li');
+        li.className = 'alert-item ' + alert.type;
+        li.innerHTML = 
+          '<div class="alert-icon">' + alert.icon + '</div>' +
+          '<div class="alert-content">' +
+          '<div class="alert-title">' + alert.title + '</div>' +
+          '<div class="alert-message">' + alert.message + '</div>' +
+          '</div>';
+        container.appendChild(li);
+      });
+    }
+
+    function renderQuota(quota) {
+      var fill = document.getElementById('quotaFill');
+      fill.style.width = quota.percent + '%';
+      if (quota.percent > 90) fill.style.background = 'var(--danger)';
+      else if (quota.percent > 75) fill.style.background = 'var(--warning)';
+      document.getElementById('quotaUsed').textContent = quota.used + ' / ' + quota.limit + ' triggers usados';
+      document.getElementById('quotaLimit').textContent = 'Limite diário: ' + quota.limit;
+    }
+
+    function loadDashboard() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            var data = result && result.success && result.data ? result.data : DEMO_DATA;
+            renderKPIs(data.kpis);
+            renderUsageChart(data.usageByDay || []);
+            renderRecentUsers(data.recentUsers);
+            renderTopVocations(data.topVocations);
+            renderAlerts(data.alerts);
+            renderQuota(data.quota);
+          })
+          .withFailureHandler(function() {
+            renderKPIs(DEMO_DATA.kpis);
+            renderUsageChart(DEMO_DATA.usageByDay);
+            renderRecentUsers(DEMO_DATA.recentUsers);
+            renderTopVocations(DEMO_DATA.topVocations);
+            renderAlerts(DEMO_DATA.alerts);
+            renderQuota(DEMO_DATA.quota);
+          })
+          .api_getAdminDashboard(authToken);
+      } else {
+        renderKPIs(DEMO_DATA.kpis);
+        renderUsageChart(DEMO_DATA.usageByDay);
+        renderRecentUsers(DEMO_DATA.recentUsers);
+        renderTopVocations(DEMO_DATA.topVocations);
+        renderAlerts(DEMO_DATA.alerts);
+        renderQuota(DEMO_DATA.quota);
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
